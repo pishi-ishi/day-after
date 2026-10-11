@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "day-after"
+version = "0.1.0"
+description = "Post-race and pre-race analysis for offshore yacht racing"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "ruzbeh" }]
+requires-python = ">=3.12"
+# Keep the app light: numpy for arrays, tzdata so zoneinfo works on Windows.
+# Everything else comes from the standard library.
+dependencies = [
+    "numpy>=2.0",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+# Development only: tests and cross-checks against reference tools. Never imported by dayafter/.
+dev = [
+    "pytest>=8",
+    "pandas>=2.2",
+    "eccodes>=2.37",
+]
+# Release builds (pinned as in 7seas-telemetrics). Pillow is only used to draw the icon.
+build = [
+    "pyinstaller==6.21.0",
+    "pillow==12.3.0",
+]
+
+[project.scripts]
+dayafter = "dayafter.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dayafter*"]
+
+[tool.setuptools.package-data]
+dayafter = ["report/assets/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "data: needs the private data/ folder; skipped when it is absent",
+]

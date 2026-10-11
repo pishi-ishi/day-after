@@ -1,6 +1,6 @@
 # Input file formats
 
-Formats are marked **verified** (checked against real files from Llama II's 2026 season) or **to verify** (T1 in HANDOVER: needs a look in `/mnt/c/ProgramData/Expedition/`). Samples come from `data/` and `fixtures/`.
+Formats are marked **verified** (checked against real files from Llama II's 2026 season) or **to verify**. T1 (a read-only look at `/mnt/c/ProgramData/Expedition/` on 11 Oct 2026) verified the GRIB, events, tracking, marks and sail-chart formats; the few details still open are marked *to verify*. Samples come from `data/` and `fixtures/`.
 
 ---
 
@@ -121,7 +121,28 @@ Both feed one interpolator: bilinear in TWS × |TWA|, below 4 kt scaled linearly
 
 **C. From a route table:** rows with a `Mark` name, using their lat/lon.
 
-**D. Expedition marks/routes file** (`CYCA SOPS LOPS.dat`, also `C:\ProgramData\Expedition\marks-routes_me\`): MFC serialisation (`CMarkGrpOb`, `CMarkOb`, `CRouteOb`, `CMarkPtrOb` class tags). Verified so far: each mark stores **two little-endian float64 (lat, lon) in degrees before its name**. Names are MFC CStrings in UTF-16LE, prefixed `FF FE FF <len>`, then a second (notes) string. Routes reference marks by pointer. A best-effort parser (scan for name strings and take the two doubles preceding each record) recovered `Start −33.86065 151.2476`, `Finish −33.84114 151.27438`, `Cape Banks −34.00053 151.25702`, plus the Cabbage Tree, Bird Island and Flinders Island marks. **Prefer GPX/CSV export from Expedition**, and treat .dat parsing as optional.
+**D. Expedition marks/routes file** (`CYCA SOPS LOPS.dat`, also `C:\ProgramData\Expedition\marks-routes_me\`): MFC serialisation (`CMarkGrpOb`, `CMarkOb`, `CRouteOb`, `CMarkPtrOb` class tags). Verified so far: each mark stores **two little-endian float64 (lat, lon) in degrees before its name**. Names are MFC CStrings in UTF-16LE, prefixed `FF FE FF <len>`, then a second (notes) string. Routes reference marks by pointer. A best-effort parser (scan for name strings and take the two doubles preceding each record) recovered `Start −33.86065 151.2476`, `Finish −33.84114 151.27438`, `Cape Banks −34.00053 151.25702`, plus the Cabbage Tree, Bird Island and Flinders Island marks. **Prefer `marks.xml` (E) or a GPX/CSV export**, and treat .dat parsing as optional.
+
+**E. Expedition marks database (`C:\ProgramData\Expedition\marks.xml`): verified (11 Oct 2026).** Plain XML holding every mark and every route Expedition knows:
+```xml
+<marksdb version="1.0" creator="Expedition - https://www.ExpeditionMarine.com">
+  <active route_id="59" mark_index="0" />
+  <marks>
+    <mark id="531" name="Bird Island E" group="Bird Island" lat="-33.229733" lon="151.605383" mob="false" lock="true" draw="true" />
+    ...
+  </marks>
+  <routes>
+    <route id="59" name="Tollgate_Islands_Windy">
+      <mark id_mark="477" pass="2" />
+      ...
+```
+- `<mark>` attributes: `id`, `name`, `group`, `lat`, `lon` (decimal degrees), `mob`, `lock`, `draw`, optional `comment`, `range_circle`.
+- `<route>` lists marks in order by `id_mark`. `pass` is `0`, `1` or `2`. It probably means no rounding side (waypoint), leave to starboard and leave to port: the Tollgate marks are traversed clockwise with `pass="1"` and the Flinders islet mark carries `pass="2"` *(to verify against the SIs)*.
+- `<active route_id>` is the route Expedition is currently sailing (on 11 Oct: `Tollgate_Islands_Windy`, whose rounding marks are named `TG SE`, `TG South`, `TG SW`, `TG NW`).
+- Validate the geometry: the `Finish` mark in group `Newcastle Bass` (used by the `Bird Island` and `Flinders Island` routes) is stored at **lat +33.842**, i.e. in the wrong hemisphere. Flag any mark far from the rest of its route.
+- Daily copies are kept in `C:\ProgramData\Expedition\archive\archive_<ddMonyyyy>\marks.xml`.
+
+**F. Race notes (`C:\ProgramData\Expedition\racenotes\racenotes.xml`): verified.** Polygons Expedition's router must avoid, one `<racenote name lat lon …>` with `<point lat lon/>` children each. On 11 Oct it held the islands of the season's courses (Bird Island, Bombora Port Hacking, Cabbage Tree Island, Flinders Islet, Tollgate Islands). Useful to draw the islands on the map and to pick the turning mark (the course vertex nearest an island polygon).
 
 ## 6. YB Tracking: verified
 
@@ -146,11 +167,30 @@ lat, lon in 1e-5 degrees
 ```
 Test vector: `fixtures/flinders_2026/yb_allpositions3_head_team2.hex`. The first 741 bytes are flags 0, refTime 1720000000, then tracker 2 with 121 moments. The first moment is at = 1790460000, lat −33.87410, lon 151.23320; the last is at = 1790226684, lat −33.87438, lon 151.23318. Decoding the whole file consumes exactly 27,443 bytes.
 
-**Names:** `https://cf.yb.tl/JSON/<key>/RaceSetup` (returned **503** on 11 Oct; treat as optional). Fallback: Expedition's tracking download `<key>-boatids.csv` (`id,name`, includes `Spare n` and `Virtual Tracker …` rows), then fuzzy match to results.
+**Race setup and names:** `https://cf.yb.tl/JSON/<key>/RaceSetup` (JSON, ISO-8859-1). It returned 503 in the morning of 11 Oct and 200 in the evening (16,777 bytes for `bwps2026`). Useful fields: `title` (`1. Flinders Islet Race 2026`), `tz`/`tzOffset` (`AEST`/36000 for Flinders, `AEDT`/39600 for Tollgate), `start`/`stop` (the tracking window, epoch s), `tags[0].start` (**the gun**, epoch s: 1790380800 for Flinders), `teams[]` (`id`, `name`, `sail`, `model`, `tcf1..3`, `finishedAt`; YB's finish is unreliable, see HANDOVER §6) and `associated2[]`, the sibling races.
 
-**Not useful for tracks:** `<key>-expedition.csv` from Expedition's tracking download has **only the latest fix per boat**: `id,lat,lon,yymmddHHMM` (e.g. `2,-33.87410,151.23320,2609262200`).
+**One key per race.** `associated2` of `bwps2026` lists the series:
 
-**Caveats:** the key spans the series, so filter to the race window. Fixes come every 10 min (5 min near the end for some boats). YB "finish" timing is unreliable (see HANDOVER §6).
+| Race | YB key | Gun (from RaceSetup) |
+|---|---|---|
+| 1. Flinders Islet Race 2026 | `bwps2026` | 26 Sep 2026 10:00 AEST |
+| 2. Tollgate Islands Race 2026 | `bwps2026_2` | 16 Oct 2026 14:00 AEDT |
+| 3. Bird Island Race 2026 | `Bwps2026_3` | not set on 11 Oct |
+| 4. Cabbage Tree Island Race | `Bwps2026_4` | not set on 11 Oct |
+
+So a later race does not overwrite the Flinders positions, although the `bwps2026` file still includes pre- and post-race fixes.
+
+**Availability:** `cf.yb.tl` answers **503 intermittently** (five failures in a row, then success, on 11 Oct). Fetch with retries and exponential backoff, cache the raw bytes in the race folder, and never depend on a live fetch at build time.
+
+**Names, in order of preference:** RaceSetup `teams`, then Expedition's `<KEY>-boatids.txt` (`id,name`, includes `Spare n` and `Virtual Tracker …` rows), then fuzzy matching to the results.
+
+**Expedition's tracking folder** (`C:\ProgramData\Expedition\tracking\`): the files are named with Expedition's spelling of the key (`BWPS2026-…`) and end in **`.txt`**, not `.csv`:
+- `<KEY>-boatids.txt`: `id,name`.
+- `<KEY>-expedition.txt`: **only the latest fix per boat**, `id,lat,lon,yymmddHHMM` (e.g. `2,-33.87410,151.23320,2609262200`). Not useful for tracks.
+- `<KEY>-YB.json`: `{"raceUrl", "teams": [{"serial", "marker", "name", "positions": [{"gpsAtMillis", "latitude", "longitude", "sogKnots", "cog", …}]}]}`. It holds **only the positions Expedition polled while it was running** (for Flinders: from 21:12 local, after most boats had finished, then hourly). Not a substitute for `AllPositions3`.
+- `C:\ProgramData\Expedition\database\racetracking.xml` keeps the same polled positions as `<boat name id><pt utc lat lon [sog]/></boat>`.
+
+**Caveats:** filter to the race window. Fixes come every 10 min (5 min near the end for some boats). YB "finish" timing is unreliable (see HANDOVER §6).
 
 ## 7. Results: verified (Day After template)
 
@@ -169,18 +209,60 @@ INI-like text sections `[notice]`, `[header]` and `[data]`. `[data]` is a CSV wi
 sort_order,wmo,name[80],history_product[80],local_date_time[80],local_date_time_full[80],aifstime_utc[80],lat,lon,...,gust_kt,air_temp,press,press_msl,...,wind_dir[80],wind_spd_kt
 0,95768,"North Head","IDN60701","26/06:30am","20260926063000","20260925203000",-33.8,151.3,...,3,-9999.0,-9999.0,-9999.0,...,"NNW",1
 ```
-Missing = `-9999`. `aifstime_utc` is `YYYYMMDDhhmmss` UTC. `wind_dir` is 16-point text. A file covers about the last 72 h at 30-min steps, so download it **within 3 days** of the race. Stations on the Flinders course: North Head 95768, Little Bay 94780, Wattamolla 95752, Bellambi 94749, Port Kembla Harbour 95745, Kiama 95749, Point Perpendicular 95940. URL pattern: `https://www.bom.gov.au/products/IDN60701/IDN60701.<wmo>.shtml` (the page links the `.axf`).
+Missing = `-9999`. `aifstime_utc` is `YYYYMMDDhhmmss` UTC. `wind_dir` is 16-point text. A file covers about the last 72 h at 30-min steps, so download it **within 3 days after the race**. Stations on the Flinders course: North Head 95768, Little Bay 94780, Wattamolla 95752, Bellambi 94749, Port Kembla Harbour 95745, Kiama 95749, Point Perpendicular 95940. URL pattern: `https://www.bom.gov.au/products/IDN60701/IDN60701.<wmo>.shtml` (the page links the `.axf`).
 
-## 9. GRIB files: to verify (T1)
+**Direct download (checked 11 Oct 2026):** `https://reg.bom.gov.au/fwo/IDN60701/IDN60701.<wmo>.axf` returns the file to a script. The `www.bom.gov.au` host answers 403 unless the request carries a browser user-agent, so scripts use `reg.`.
 
-Location: `C:\ProgramData\Expedition\grib\`. Expected: Saildocs GRIB1 (simple packing) and Expedition-server GRIB2 per model (GFS, ECMWF, ACCESS-SY/G, ICON, AIGFS/AIFS). Record per file: edition, centre, grid (template 3.0 regular lat/lon?), **packing template** (5.0 / 5.2 / 5.3 / 5.40 / 5.41 / 5.42), parameters and levels, step count, file sizes. Decoder plan and decision rule: HANDOVER §4 T1.
+**Flinders 2026:** the seven saved station files all end at 25 Sep 20:30–21:00 UTC (06:30–07:00 on race morning). They were downloaded before the start and do not cover the race, so Flinders has no BOM overlay.
+
+## 9. GRIB files: verified (11 Oct 2026, every message of the Flinders files)
+
+Location: `C:\ProgramData\Expedition\grib\`. File names: `EX_<MODEL>_<res>_<ddMonyy>_<hhmmss>.grb` (Expedition server, named by download time) and `SD_<MODEL>_<ddMonyy>_<hhmmss>.grb` (Saildocs). **Copy the race files promptly:** Expedition's newer downloads in that folder are 0-byte stubs, so files do not stay there reliably.
+
+| Source | Edition | Centre | Grid | Packing (section 5) | Notes |
+|---|---|---|---|---|---|
+| `EX_ECMWF_025`, `EX_EC_AIFS_025` | GRIB2 | 98 | 3.0 regular lat/lon (0.1° or 0.25°) | **5.3** | PDT 4.0 and 4.8; MSL (0/3/0), U/V 10 m, gust (0/2/22), T2m, precip (0/1/193 ECMWF local, 0/1/52 AIFS), cloud (0/6/192 local, 0/6/1 AIFS), waves (discipline 10) |
+| `EX_GFS_025` | GRIB2 | 7 | 3.0 (0.25°) | **5.3**, some **5.2** | PRMSL (0/3/1), U/V 10 m, gust at surface, precip rate (0/1/7), cloud (0/6/1), T2m, CAPE, waves |
+| `EX_GFS_011` | GRIB2 | 7 | **3.40 Gaussian** | 5.3 | V 10 m and precip only; optional |
+| `EX_ICON_01` | GRIB2 | 78 | 3.0 (0.1°) | 5.3 | Forecast time in **minutes** (unit 0); PRMSL, U/V 10 m, gust 10 m, precip (0/1/52), T2m |
+| `EX_AIGFS_025` | GRIB2 | 7 | 3.0 (0.25°) | 5.3 | MSL, U/V 10 m, T2m only (no gust) |
+| `EX_Mercator_0083` | GRIB2 | 512 | 3.0 (1/12°) | 5.3 | Ocean current u/v (10/1/2, 10/1/3) |
+| `EX_ASCAT_01` | GRIB2 | 7 | 3.0 (0.1°) | 5.3 | Scatterometer wind analysis (3/1/192, 3/1/193) |
+| `SD_GFS`, `SD_ECMWF` (Saildocs) | GRIB1 | 7, 98 | GDS type 0 lat/lon | **simple packing** (BDS flags 0) | IBM-float reference value; time-range indicator 10 (P1 is 2 bytes) |
+| `EX_ACCESS_Sydney_0013`, `EX_UM_Global_01*.gre`, `Expedition_*_Sydney_*.gre` | — | — | — | — | **Encrypted:** files start with `grbenc01`, not `GRIB`. Licensed data that only Expedition can read. Day After reports "encrypted, skipped" and never tries to decode them. |
+
+Findings that shape the decoder:
+- **No JPEG2000 (5.40), PNG (5.41) or CCSDS (5.42)** in any file, so the decoder is pure Python + numpy: 5.0, 5.2 and 5.3 (with missing-value management and spatial differencing of order 1 and 2) plus GRIB1 simple packing. Pillow and eccodes are not needed at run time; an unexpected template raises a clear "unsupported packing" error.
+- **No bitmaps** (section 6 indicator 255) in any file.
+- **Several fields per message:** some GRIB2 messages repeat sections 4–7 (ECMWF and ICON wind), so the decoder loops over sections instead of assuming one field per message.
+- Expedition's GRIB2 writer puts `FF FF` in the reserved bytes of section 0. Harmless.
+- ECMWF sets the level's scaled value to `FFFFFFFF` (missing) for mean sea level and surface fields.
+- Grids are small regional crops (e.g. 76 × 58 at 0.1°), so the files are small and decoding them in pure Python is fast.
+- Expedition re-downloads during the race; the Flinders folder has runs at 25 Sep 16:57 (used by the race-eve routings) and 26 Sep 06:00, 07:22, 08:35, 12:16, 13:32, 14:37, 15:05, 18:06 and 20:39. Each file covers about 144 h of forecast.
+- The reference decoder for tests is `eccodes` (dev dependency only); public test vectors are cut from **GFS** messages (NOAA, public domain).
 
 Parameters to read (GRIB2 discipline/category/number → GRIB1 table 2):
-U10 (0/2/2 → 33), V10 (0/2/3 → 34), gust (0/2/22 → 180 at NCEP), MSLP/PRMSL (0/3/1 → 2), 2 m temperature (0/0/0 → 11), precipitation rate or total (0/1/7, 0/1/8 → 59/61), total cloud (0/6/1 → 71). Wind level: type 103 (GRIB2) / 105 (GRIB1), 10 m.
+U10 (0/2/2 → 33), V10 (0/2/3 → 34), gust (0/2/22 → 180 at NCEP), MSLP/PRMSL (0/3/0 or 0/3/1 → 2), 2 m temperature (0/0/0 → 11), precipitation rate or total (0/1/7, 0/1/8, 0/1/52, 0/1/193 → 59/61), total cloud (0/6/1, 0/6/192 → 71). Wind level: type 103 (GRIB2) / 105 (GRIB1), 10 m.
 
-## 10. Expedition events (sail changes, notes): to verify (T1)
+## 10. Expedition events (sail changes, notes): verified (11 Oct 2026)
 
-The navigator logs sail changes in Expedition. Find the store (`database/`, `racenotes/` or inside `log/`) and document its format and the naming the navigator uses (e.g. `J1`, `A2`, `Reef 1`). Until then, Day After also accepts its own `events.csv`:
+Events live in **`C:\ProgramData\Expedition\database\Expedition.db`**, a **SQLite 3** database (32 KB). Open it read-only (`file:…?mode=ro&immutable=1`) or work on a copy; Expedition also keeps daily copies in `archive\archive_<ddMonyyyy>\Expedition.db`.
+
+```
+EVENT(ID, TIME REAL, LAT REAL, LON REAL, FORESAIL_ID, STAYSAIL_ID, STAYSAIL2_ID, MAINSAIL_ID,
+      REEF INTEGER, TANK INTEGER, TYPE_ID INTEGER, TYPE_VAL REAL, AUTO INTEGER, NOTE TEXT)
+EVENT_TYPE(ID, SYS, NAME)     SAIL(ID, NAME, FORE, STAY, MAIN, USE, COLOUR, NOTE)
+ATTR_TYPE(ID, SYS, NAME)      ATTR(ID, TYPE_ID, NAME)      TEST(…)  -- performance tests, empty
+```
+- `TIME` is the **Excel serial in UTC**, like the log's `Utc`.
+- Sail columns reference `SAIL.ID`; **32767 means none/unchanged**. `REEF` is the reef number. `AUTO` = 1 for events Expedition created itself (Gun, MOB/SART alerts).
+- `EVENT_TYPE` (Llama II, 2026): 1 Other, 2 Gun, 3 Finish, 4 MOB, 5 SART, 6 Test start, 7 Test end, 8 Misc, 9 Photo, 10 Tech problem, 11 Sails up, 12 Race leg, 13 Line port, 14 Line starboard, 15 Set route.
+- `SAIL` (Llama II, 2026): J4, J3, J2, J1, WS, Main, SJ, OB J4, Poled J4, Poled J1, OB J1, A1/2. The same names as the sail chart and the route tables' `Sail` column.
+- `ATTR` holds sea-state words (Calm … Phenomenal).
+
+**Flinders 2026 (26 Sep):** line pings (Line port/starboard, 09:25–09:33 local), Gun at 10:00:00 (auto) and a **stray second Gun** at 15:26:56, one "Other" event at 18:43 with a reef note ("reefed the main @1745 …", `REEF` 2), and automatic SART events "MOB ACTIVE 972…" at 19:09 (an AIS MOB beacon nearby). **No sail-change events**, so no performance-by-sail for Flinders. Day After therefore picks the gun from the project file or YB RaceSetup and uses the Gun event nearest to it, ignoring the rest.
+
+Day After also accepts its own `events.csv`, for boats without Expedition or for events added afterwards:
 ```
 time_local,type,value,text
 2026-09-26 11:10,sail,A1/2,hoist A1/2 at Dunbar
@@ -189,9 +271,9 @@ time_local,type,value,text
 ```
 `type` ∈ `sail | reef | note | mark | penalty | incident`.
 
-## 11. Expedition sail chart: to verify (optional)
+## 11. Expedition sail chart: verified (optional)
 
-`C:\ProgramData\Expedition\sails\SailChart_Llama_S2H*`. The route table's `Sail` column already gives the planned sail per step, so parsing the chart is only needed to show the crossover chart itself.
+`C:\ProgramData\Expedition\sails\SailChart_Llama_S2H.txt` (also `Sailchart.txt`, and `SailChart.xml` from 2022). Tab-separated matrix: the first row holds TWA columns (35, 40 … 160°), each following row starts with a TWS value (35 kt downwards) followed by one sail name per TWA column (`SJ`, `J4`, `OB J4`, `Poled J4`, `OB J1`, `Poled J1`, …); blank cells mean no entry. The route table's `Sail` column already gives the planned sail per step, so parsing the chart is only needed to draw the crossover chart itself.
 
 ## 12. Day After project file (`race.dayafter.json`): proposed
 

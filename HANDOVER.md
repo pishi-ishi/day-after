@@ -4,6 +4,8 @@
 **To:** Claude Code on the owner's WSL2 machine
 **Status:** design final, inputs gathered. **No application code exists yet.** This folder is the starting point of the `day-after` repository.
 
+> **Progress, 11 Oct 2026 (Claude Code on WSL2).** T0, T1 and T2 are done: the repository is public at <https://github.com/pishi-ishi/day-after>; the T1 findings are in `docs/FILE_FORMATS.md` §§5E–F, 6, 8–11; the Flinders YB file, RaceSetup, race GRIBs, `Expedition.db`, `marks.xml`, `racenotes.xml`, sail chart, tracking files and the seven BOM station files are saved under `data/`. **Sequencing decided by the owner:** a thin **Day Before** slice comes first, so the crew briefing is ready for the **Tollgate Islands Race (YB `bwps2026_2`, gun Fri 16 Oct 2026 14:00 AEDT)**, together with `fetch-yb` and `fetch-bom` for the post-race capture. Milestones M1–M5 follow. Development uses Python 3.12 in `.venv` (made with `uv`).
+
 Day After is a local post-race (and pre-race) analysis tool for offshore yacht racing, modelled on Njord Analytics. It has four post-race report editions plus a pre-race "Day Before" crew briefing. Its first users are Llama II (Dehler 46, IRC, owner Jon Linton), the navigator (repo owner, GitHub `pishi-ishi`), the crew, and clients of 7 Seas Marine Electronics.
 
 ---
@@ -51,7 +53,7 @@ The live design doc and the hand-made race report are Claude Docs. They mirror `
 - **Windows files** are under `/mnt/c/...`. Useful paths on this PC (user `user`):
   - Expedition data: `/mnt/c/ProgramData/Expedition/` with sub-folders `grib`, `database`, `tracking`, `sails`, `log`, `polars`, `polars_ORC_Certificates`, `marks-routes_me`, `racenotes`, `wxdata`, `calibration`, `config`, `archive`.
   - Navigation library: `/mnt/c/Users/user/Downloads/Offshore_Navigation_Expedition/` (ORC certificates and polars, GPX courses for the coming races, BOM station `.axf` files, the Flinders results PDF and screenshot, and the Expedition pre-race routings for Flinders).
-  - Pre-race routings: `/mnt/c/Users/user/Downloads/llama2_offshore_program_2026/Expedition pre-race routings/`
+  - Pre-race routings: `/mnt/c/Users/user/Downloads/Offshore_Navigation_Expedition/llama2_offshore_program_2026/Flinder_Islet_2026(llama_II)/Expedition pre-race routings/`. The navigator keeps one folder per race there (routings, results PDF, boat ids, post-race report).
   - 7seas-telemetrics checkout: `/mnt/c/Users/user/Downloads/7Seas_telemetrics/7seas-telemetrics/` (also `github.com/pishi-ishi/7seas-telemetrics`, public, MIT).
   - Website repo (brand source): `github.com/pishi-ishi/7seasmarine.me` (private). The original logo image may also be in `/mnt/c/Users/user/Documents/7seasmarine.me/`.
 - **Packaging.** PyInstaller cannot cross-compile. A WSL2 build produces a Linux binary only. Build the Windows `.exe` either with a Windows Python venv (as 7seas-telemetrics' `build.ps1` does; the PC has Anaconda) or with a **GitHub Actions matrix** (`windows-latest`, `macos-latest`, `ubuntu-latest`) that attaches all three binaries to a release. The matrix is the recommended route.
@@ -110,7 +112,7 @@ fixtures/                     public test vectors and expected numbers
 data/                         private race data (git-ignored)
 ```
 
-**Dependencies (keep the bundle small):** `numpy`, `Pillow` (GRIB JPEG2000/PNG unpacking and the icon), `tzdata` (zoneinfo on Windows). Use the **standard library** for everything else: `http.server`, `sqlite3`, `json`, `csv`, `xml.etree`, `zoneinfo`, `urllib`. No pandas, Flask or matplotlib in the app; they are fine in dev scripts and tests.
+**Dependencies (keep the bundle small):** `numpy` and `tzdata` (zoneinfo on Windows) at run time. T1 found no JPEG2000, PNG or CCSDS packing in Expedition's GRIBs, so `Pillow` is only a build-time dependency (the icon). Use the **standard library** for everything else: `http.server`, `sqlite3`, `json`, `csv`, `xml.etree`, `zoneinfo`, `urllib`. No pandas, Flask or matplotlib in the app; they are fine in dev scripts and tests.
 
 **Charts in reports:** write a small custom SVG/vanilla-JS chart module and inline it into each report, so reports stay self-contained and offline. Needed views: linked map (pan/zoom, tracks, routes, marks, time cursor), time-series lines with shared crosshair and brush selection that shows stats, scatter, bars, a polar diagram, a gap-vs-distance chart and sortable tables. Follow the dataviz rules in `docs/BRAND.md`: one y-axis per chart, legend for ≥2 series, our boat always blue, a fixed colour per model and rival, hover tooltips, a table view, and dark mode chosen deliberately.
 
@@ -139,8 +141,8 @@ data/                         private race data (git-ignored)
 **Fleet / results**
 - **YB finish times are 1–45 min later than the official elapsed time** (mean 7.4 min over 28 boats). Llama II: YB 11:47:45 vs official 11:44:00. Llama II passed 48 m from Expedition's finish point at 21:43:28 and finished officially at about 21:44:00. **Elapsed = corrected ÷ TCC, always.**
 - The first hand-made report derived TCCs from YB (e.g. 1.130 for Llama II vs official 1.136). It was corrected on 11 Oct. Expected numbers in `fixtures/` use official TCCs.
-- **YB key `bwps2026`** spans the series and includes pre- and post-race positions (e.g. 121 fixes for boat 2 vs 83 in the race window). Filter by the race window. Positions are **newest first** inside AllPositions3.
-- YB `RaceSetup` (`https://cf.yb.tl/JSON/bwps2026/RaceSetup`) returned **503** on 11 Oct. Do not depend on it: take names from Expedition's `bwps2026-boatids.csv` (YB id → name) or a manual mapping, and fall back to fuzzy matching against the results.
+- **YB key `bwps2026`** is the Flinders race. Every race in the series has its own key (`bwps2026_2` Tollgate, `Bwps2026_3` Bird Island, `Bwps2026_4` Cabbage Tree; listed in RaceSetup `associated2`). The file includes pre- and post-race positions (e.g. 121 fixes for boat 2 vs 83 in the race window). Filter by the race window. Positions are **newest first** inside AllPositions3.
+- YB answers **503 intermittently**: `RaceSetup` (`https://cf.yb.tl/JSON/bwps2026/RaceSetup`) failed in the morning of 11 Oct and worked in the evening; `AllPositions3` failed five times in a row before succeeding. Fetch with retries and backoff, cache the bytes in the race folder, and never depend on a live fetch at build time. Names: RaceSetup `teams` first, then Expedition's `BWPS2026-boatids.txt` (YB id → name; Expedition writes `.txt`), then fuzzy matching against the results. RaceSetup `tags[0].start` is the gun.
 - Name mismatches YB ↔ results: `Artaraxia`↔`Ataraxia`, `Wot's Next`↔`Wots Next`, `Back 2 Black`↔`BACK 2 BLACK`, `(DH)` suffixes. Normalise to lowercase alphanumerics, then use `difflib` (cutoff 0.75). See `fixtures/flinders_2026/yb_id_to_results_name.json`.
 - The boat-ids file also lists spares and virtual trackers (`Spare 3`, `Virtual Tracker 9990502` in `bwps2026_4-boatids.csv`). Keep only boats that appear in the results.
 
@@ -185,10 +187,12 @@ data/                         private race data (git-ignored)
 
 ## 9. Open items and unknowns
 
-- Expedition GRIB packing, events store, tracking and sail-chart formats → **T1**.
-- YB `RaceSetup` endpoint availability (503 on 11 Oct). Names come from the boat-ids CSV meanwhile.
-- The YB race key per race: `bwps2026` held Flinders. Confirm on the CYCA tracker page for each race (`bwps2026_4-boatids.csv` suggests per-race keys may also exist).
-- Magnetic variation model: a simple latitude table vs WMM coefficients (a small file).
+- ~~Expedition GRIB packing, events store, tracking and sail-chart formats~~ → closed by T1 (11 Oct): GRIB2 5.2/5.3 and GRIB1 simple packing only, ACCESS/UM encrypted; events in SQLite `Expedition.db`; see `docs/FILE_FORMATS.md` §§9–11.
+- ~~YB `RaceSetup` availability~~ → works, but YB returns 503 intermittently (see §6).
+- ~~The YB race key per race~~ → one key per race, confirmed from RaceSetup `associated2` (see FILE_FORMATS §6).
+- ~~Magnetic variation model~~ → v1 uses the project-file value, else a latitude-interpolated table (12.8° E Sydney → about 15° E Hobart), and records the value used. WMM can replace the table later if Sydney–Hobart needs it.
+- The meaning of `pass` (0/1/2) on route marks in Expedition's `marks.xml`: probably none/starboard/port (FILE_FORMATS §5E).
+- Flinders has no BOM observations during the race: the saved station files end on race morning.
 - The route table's parenthesised TWA meaning (see §6).
 - `docs/DATA_GUIDE.md` asks the owner to export route tables for every model on race morning. For Flinders only the 25 Sep 17:34 tables exist; the race-morning runs exist only as summary totals.
 
