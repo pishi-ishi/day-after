@@ -137,7 +137,7 @@ Both feed one interpolator: bilinear in TWS × |TWA|, below 4 kt scaled linearly
       ...
 ```
 - `<mark>` attributes: `id`, `name`, `group`, `lat`, `lon` (decimal degrees), `mob`, `lock`, `draw`, optional `comment`, `range_circle`.
-- `<route>` lists marks in order by `id_mark`. `pass` is `0`, `1` or `2`. It probably means no rounding side (waypoint), leave to starboard and leave to port: the Tollgate marks are traversed clockwise with `pass="1"` and the Flinders islet mark carries `pass="2"` *(to verify against the SIs)*.
+- `<route>` lists marks in order by `id_mark`. `pass` is `0`, `1` or `2` *(meaning to verify against the SIs)*. It may be the side to leave the mark, but the evidence conflicts: the Tollgate `TG` marks (traversed clockwise) carry `1`, while coastal waypoints that a southbound boat leaves to starboard (Wattamolla, Point Perpendicular) carry `2`. Day After keeps the raw code and does not show a rounding side.
 - `<active route_id>` is the route Expedition is currently sailing (on 11 Oct: `Tollgate_Islands_Windy`, whose rounding marks are named `TG SE`, `TG South`, `TG SW`, `TG NW`).
 - Validate the geometry: the `Finish` mark in group `Newcastle Bass` (used by the `Bird Island` and `Flinders Island` routes) is stored at **lat +33.842**, i.e. in the wrong hemisphere. Flag any mark far from the rest of its route.
 - Daily copies are kept in `C:\ProgramData\Expedition\archive\archive_<ddMonyyyy>\marks.xml`.

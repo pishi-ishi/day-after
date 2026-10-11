@@ -51,10 +51,10 @@ The app icon follows the 7seas-telemetrics icon (two masts, two sails, hull base
 | **Our boat** (always) | `#2a78d6` blue | `#3987e5` | solid, thicker line |
 | GFS | `#eb6834` orange | `#d95926` | dashed `6 3`, circle markers |
 | ECMWF | `#1baf7a` aqua | `#199e70` | dashed `2 2`, square markers |
-| ACCESS | `#eda100` yellow | `#c98500` | dash-dot, triangle markers |
+| ACCESS | `#6250d6` violet | `#9085e9` | dash-dot, triangle markers |
 | Rival 1 | `#e87ba4` magenta | `#d55181` | direct label |
 | Rival 2 | `#008300` green | `#008300` | direct label |
-| Rival 3 | `#6250d6` violet | `#9085e9` | direct label |
+| Rival 3 | `#eda100` yellow | `#c98500` | direct label |
 | Other model / 4th rival | `#e34948` red | `#e66767` | direct label |
 | Everyone else (fleet context) | muted ink at 35 % | | no label |
 
@@ -69,7 +69,8 @@ The app icon follows the 7seas-telemetrics icon (two masts, two sails, hull base
 - Hover by default: crosshair + tooltip on lines, per-mark tooltip on dots and bars. Map and time charts share one time cursor.
 - A table view for every chart (the navigator edition shows them; the others link to them).
 - Text uses ink tokens, never series colours.
-- Yellow sits below 3:1 contrast on the light surface, so ACCESS lines always carry a direct label.
+- Yellow (rival 3), aqua (ECMWF) and magenta (rival 1) sit below 3:1 contrast on the light surface, so they always carry a direct label and a table view.
+- **Model colours are validated all-pairs** (11 Oct 2026, `dataviz` validator): routes cross anywhere on a map, so every pair of the three model colours must separate, not just neighbours. The original ACCESS yellow failed against GFS orange (normal-vision ΔE 13.7 light / 10.6 dark, below the hard floor of 15; deutan ΔE 4.8 dark). GFS orange, ECMWF aqua and **ACCESS violet** pass all-pairs in both modes (worst CVD ΔE 9.2 light / 9.4 dark; worst normal-vision ΔE 27.6 / 24.6). Rival 3 took the yellow. The eight hexes are unchanged; only their assignment moved.
 - Scatter/map with >3 coloured series: fade the rest to the muted fleet colour.
 - Typeface: system sans (`system-ui, -apple-system, "Segoe UI", sans-serif`), tabular figures in tables and axes.
 - Print: A4 portrait, one module per page group, charts static, hover layer hidden, URLs printed.
