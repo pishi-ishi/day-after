@@ -50,7 +50,7 @@ It writes `out/day_before_<race>.html` in that folder: one file that opens offli
 
 ```json
 {
-  "race": {"name": "Tollgate Islands Race 2026", "gun_local": "2026-10-16T14:00:00", "tz": "Australia/Sydney"},
+  "race": {"name": "Tollgate Islands Race 2026", "gun_local": "2026-10-16T17:00:00", "tz": "Australia/Sydney"},
   "boat": {"name": "Llama II"},
   "course": {"turning_mark": "TG South"},
   "crew_models": ["ECMWF", "GFS", "ACCESS"]

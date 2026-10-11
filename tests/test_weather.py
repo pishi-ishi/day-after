@@ -3,7 +3,7 @@ import pytest
 
 from dayafter.analysis import weather as W
 
-T0 = 1792119600.0  # 16 Oct 2026 14:00 AEDT
+T0 = 1792130400.0  # 16 Oct 2026 17:00 AEDT
 
 
 def series(dirs, speeds=None, step=600.0):

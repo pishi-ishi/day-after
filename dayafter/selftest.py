@@ -39,8 +39,8 @@ def check_time_zones() -> str:
     from .core import timeutil
     flinders = timeutil.local_to_epoch(dt.datetime(2026, 9, 26, 10, 0), "Australia/Sydney")
     assert flinders == 1790380800, flinders  # AEST, UTC+10 (ACCEPTANCE: gun epoch)
-    tollgate = timeutil.local_to_epoch(dt.datetime(2026, 10, 16, 14, 0), "Australia/Sydney")
-    assert tollgate == 1792119600, tollgate  # 03:00Z: AEDT, UTC+11 (YB RaceSetup bwps2026_2)
+    tollgate = timeutil.local_to_epoch(dt.datetime(2026, 10, 16, 17, 0), "Australia/Sydney")
+    assert tollgate == 1792130400, tollgate  # 06:00Z: Tollgate gun 17:00 AEDT (UTC+11)
     assert timeutil.excel_to_epoch(25569.0) == 0.0
     assert timeutil.parse_duration("13:19:45") == 47985
     return "AEST/AEDT, Excel serial and durations"

@@ -167,14 +167,14 @@ lat, lon in 1e-5 degrees
 ```
 Test vector: `fixtures/flinders_2026/yb_allpositions3_head_team2.hex`. The first 741 bytes are flags 0, refTime 1720000000, then tracker 2 with 121 moments. The first moment is at = 1790460000, lat −33.87410, lon 151.23320; the last is at = 1790226684, lat −33.87438, lon 151.23318. Decoding the whole file consumes exactly 27,443 bytes.
 
-**Race setup and names:** `https://cf.yb.tl/JSON/<key>/RaceSetup` (JSON, ISO-8859-1). It returned 503 in the morning of 11 Oct and 200 in the evening (16,777 bytes for `bwps2026`). Useful fields: `title` (`1. Flinders Islet Race 2026`), `tz`/`tzOffset` (`AEST`/36000 for Flinders, `AEDT`/39600 for Tollgate), `start`/`stop` (the tracking window, epoch s), `tags[0].start` (**the gun**, epoch s: 1790380800 for Flinders), `teams[]` (`id`, `name`, `sail`, `model`, `tcf1..3`, `finishedAt`; YB's finish is unreliable, see HANDOVER §6) and `associated2[]`, the sibling races.
+**Race setup and names:** `https://cf.yb.tl/JSON/<key>/RaceSetup` (JSON, ISO-8859-1). It returned 503 in the morning of 11 Oct and 200 in the evening (16,777 bytes for `bwps2026`). Useful fields: `title` (`1. Flinders Islet Race 2026`), `tz`/`tzOffset` (`AEST`/36000 for Flinders, `AEDT`/39600 for Tollgate), `start`/`stop` (the tracking window, epoch s), `tags[0].start` (the start YB was set up with, epoch s; **not reliably the gun**: right for Flinders at 1790380800, three hours early for Tollgate), `teams[]` (`id`, `name`, `sail`, `model`, `tcf1..3`, `finishedAt`; YB's finish is unreliable, see HANDOVER §6) and `associated2[]`, the sibling races.
 
 **One key per race.** `associated2` of `bwps2026` lists the series:
 
-| Race | YB key | Gun (from RaceSetup) |
+| Race | YB key | Gun |
 |---|---|---|
 | 1. Flinders Islet Race 2026 | `bwps2026` | 26 Sep 2026 10:00 AEST |
-| 2. Tollgate Islands Race 2026 | `bwps2026_2` | 16 Oct 2026 14:00 AEDT |
+| 2. Tollgate Islands Race 2026 | `bwps2026_2` | 16 Oct 2026 17:00 AEDT (owner; YB's setup says 14:00) |
 | 3. Bird Island Race 2026 | `Bwps2026_3` | not set on 11 Oct |
 | 4. Cabbage Tree Island Race | `Bwps2026_4` | not set on 11 Oct |
 

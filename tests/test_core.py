@@ -18,7 +18,7 @@ def test_excel_serial_round_trip():
 
 @pytest.mark.parametrize("local, epoch", [
     (dt.datetime(2026, 9, 26, 10, 0), 1790380800),    # Flinders gun, AEST (UTC+10)
-    (dt.datetime(2026, 10, 16, 14, 0), 1792119600),   # Tollgate gun, AEDT (UTC+11) after 4 Oct
+    (dt.datetime(2026, 10, 16, 17, 0), 1792130400),   # Tollgate gun, AEDT (UTC+11) after 4 Oct
     (dt.datetime(2026, 12, 26, 13, 0), 1798250400),   # Sydney-Hobart gun, AEDT
 ])
 def test_sydney_wall_clock(local, epoch):
@@ -43,7 +43,7 @@ def test_format_helpers():
     assert timeutil.fmt_duration(42240.3) == "11:44:00"
     assert timeutil.fmt_duration(-90061) == "−1:01:01:01"
     assert timeutil.fmt_minutes(-240) == "−4 min"
-    assert timeutil.utc_offset_label(1792119600, "Australia/Sydney") == "AEDT (UTC+11)"
+    assert timeutil.utc_offset_label(1792130400, "Australia/Sydney") == "AEDT (UTC+11)"
 
 
 def test_ddm_and_distance():

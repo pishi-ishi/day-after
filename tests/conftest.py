@@ -52,7 +52,7 @@ def route_table_text(rows: list[dict], model: str = "GFS", created: str = "15-Oc
     return "\n".join(out) + "\n"
 
 
-def tollgate_like_rows(change_at: dt.datetime, start: dt.datetime = dt.datetime(2026, 10, 16, 14, 0)) -> list[dict]:
+def tollgate_like_rows(change_at: dt.datetime, start: dt.datetime = dt.datetime(2026, 10, 16, 17, 0)) -> list[dict]:
     """Sydney -> Tollgate Islands -> Sydney in 30-min steps, with a NE -> S change at `change_at` (local AEDT)."""
     pts = [(-33.8558, 151.2535, "Start"), (-34.6, 151.0, ""), (-35.1, 150.83, "Point Perpendicular"),
            (-35.755, 150.258, "TG South"), (-35.1, 150.85, ""), (-34.2, 151.2, ""), (-33.842, 151.274, "Finish")]

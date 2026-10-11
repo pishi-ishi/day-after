@@ -316,19 +316,35 @@ def _choose_course(inputs: detect.Inputs, proj: dict, first_route: RouteTable | 
     return course_mod.Course(name="(no course)", marks=[], source="")
 
 
-def _gun(proj: dict, inputs: detect.Inputs, routes: list[RouteTable], tz: str) -> tuple[float, str]:
-    g = (proj.get("race") or {}).get("gun_local")
-    if g:
-        import datetime as dt
-        return timeutil.local_to_epoch(dt.datetime.fromisoformat(g), tz), "race file"
+def _gun(proj: dict, inputs: detect.Inputs, routes: list[RouteTable], tz: str,
+         warnings: list[str]) -> tuple[float, str]:
+    """The gun: race file, else the start the routings share (they are run from the gun), else YB's race setup.
+
+    YB's setup start is not reliable: it was right for Flinders and three hours early for Tollgate 2026."""
+    import datetime as dt
+    yb_gun = None
     for p in inputs.yb_setup:
         try:
             s = yb.read_race_setup(p)
-            if s.get("gun"):
-                return float(s["gun"]), f"YB race setup ({s.get('title') or os.path.basename(p)})"
         except (OSError, ValueError):
             continue
-    return min(r.start for r in routes), "first row of the route tables"
+        if s.get("gun"):
+            yb_gun = float(s["gun"])
+            break
+    g = (proj.get("race") or {}).get("gun_local")
+    if g:
+        gun, source = timeutil.local_to_epoch(dt.datetime.fromisoformat(g), tz), "race file"
+    else:
+        starts = sorted(r.start for r in routes)
+        common = starts[len(starts) // 2]
+        if any(abs(s - common) > 600 for s in starts):
+            warnings.append("the route tables start at different times; the gun is taken as the most common start "
+                            f"({timeutil.fmt_local(common, tz)}). Set gun_local in race.dayafter.json if that is wrong.")
+        gun, source = common, "route tables (common start)"
+    if yb_gun is not None and abs(yb_gun - gun) > 300:
+        warnings.append(f"YB's race setup gives the start as {timeutil.fmt_local(yb_gun, tz, '%a %H:%M')}, the "
+                        f"{source} {timeutil.fmt_local(gun, tz, '%a %H:%M')}; using the {source}.")
+    return gun, source
 
 
 def _yb_title(inputs: detect.Inputs) -> str:
@@ -407,7 +423,7 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
     turning = course.turning_mark.name if course.turning_mark else ""
     label = turning_label(turning)
 
-    gun, gun_source = _gun(proj, inputs, routes, tz)
+    gun, gun_source = _gun(proj, inputs, routes, tz, warnings)
 
     plans = []
     for r in plan_routes:

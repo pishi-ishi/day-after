@@ -19,8 +19,9 @@ def race(tmp_path):
     """A Tollgate-like race folder: three models whose change arrives at different times."""
     routes = tmp_path / "routes"
     routes.mkdir()
-    for model, hh in (("ECMWF", 21), ("GFS", 19), ("ACCESS", 23)):
-        rows = tollgate_like_rows(change_at=dt.datetime(2026, 10, 16, hh, 0))
+    gun = dt.datetime(2026, 10, 16, 17, 0)
+    for model, hours in (("ECMWF", 7), ("GFS", 5), ("ACCESS", 9)):
+        rows = tollgate_like_rows(change_at=gun + dt.timedelta(hours=hours))
         (routes / f"{model}_15_1900_15oct2026.csv").write_text(route_table_text(rows, model=model), encoding="utf-8")
     (tmp_path / "notes.md").write_text("Reef early if the change beats us to the islands.", encoding="utf-8")
     return tmp_path
@@ -29,11 +30,11 @@ def race(tmp_path):
 def test_briefing_on_synthetic_race(race):
     b = build_briefing(str(race))
     assert [p.model for p in b.plans] == ["ECMWF", "GFS", "ACCESS"]
-    assert b.gun_source == "first row of the route tables" and fmt_local(b.gun, b.tz, "%H:%M %Z") == "14:00 AEDT"
+    assert b.gun_source == "route tables (common start)" and fmt_local(b.gun, b.tz, "%H:%M %Z") == "17:00 AEDT"
     assert b.turning_name == "TG South"
-    eta = {p.model: fmt_local(p.eta_turning, b.tz, "%H:%M") for p in b.plans}
-    assert eta == {"ECMWF": "21:30", "GFS": "21:30", "ACCESS": "21:30"}
-    change = {p.model: fmt_local(p.change.t, b.tz, "%H:%M") for p in b.plans}
+    eta = {p.model: fmt_local(p.eta_turning, b.tz, "%a %H:%M") for p in b.plans}
+    assert eta == {"ECMWF": "Sat 00:30", "GFS": "Sat 00:30", "ACCESS": "Sat 00:30"}
+    change = {p.model: p.change.t for p in b.plans}
     assert change["GFS"] < change["ECMWF"] < change["ACCESS"]
     assert b.window["before"] == ["ACCESS"] and set(b.window["after"]) == {"ECMWF", "GFS"}
     assert "disagree" in b.window["verdict"]
@@ -43,7 +44,7 @@ def test_briefing_on_synthetic_race(race):
 
 def test_models_option_and_race_file(race):
     (race / "race.dayafter.json").write_text(json.dumps({
-        "race": {"name": "Tollgate Islands Race 2026", "gun_local": "2026-10-16T14:00:00"},
+        "race": {"name": "Tollgate Islands Race 2026", "gun_local": "2026-10-16T17:00:00"},
         "course": {"turning_mark": "Point Perpendicular"}, "crew_models": ["GFS", "ACCESS"]}))
     b = build_briefing(str(race))
     assert b.race_name == "Tollgate Islands Race 2026" and b.gun_source == "race file"
@@ -85,7 +86,7 @@ def test_gpx_course_when_the_routing_names_few_marks(tmp_path):
     """Route tables that name only start and finish fall back to the GPX course; numbered points read well."""
     routes = tmp_path / "routes"
     routes.mkdir()
-    rows = tollgate_like_rows(change_at=dt.datetime(2026, 10, 16, 23, 0))
+    rows = tollgate_like_rows(change_at=dt.datetime(2026, 10, 17, 2, 0))
     for r in rows:
         r["mark"] = ""
     rows[0]["mark"], rows[-1]["mark"] = "Start", "Finish"
@@ -98,5 +99,15 @@ def test_gpx_course_when_the_routing_names_few_marks(tmp_path):
     b = build_briefing(str(tmp_path))
     assert b.course.source.endswith("course.gpx")
     assert b.turning_label == "the turning mark (point 3)"
-    assert fmt_local(b.plans[0].eta_turning, b.tz, "%H:%M") == "21:30"
+    assert fmt_local(b.plans[0].eta_turning, b.tz, "%a %H:%M") == "Sat 00:30"
     assert any("point 3" in c["text"] for c in b.plans[0].callouts)
+
+
+def test_yb_setup_start_does_not_override_the_routings(race):
+    """Tollgate 2026: YB's race setup said 14:00, the gun was 17:00. The routings' start wins, with a warning."""
+    (race / "yb_bwps2026_2_RaceSetup.json").write_text(
+        '{"url":"bwps2026_2","title":"2. Tollgate Islands Race 2026","tags":[{"start":1792119600}],"teams":[]}')
+    b = build_briefing(str(race))
+    assert fmt_local(b.gun, b.tz, "%H:%M") == "17:00" and b.gun_source == "route tables (common start)"
+    assert any("YB's race setup gives the start as Fri 14:00" in w for w in b.warnings)
+    assert b.race_name == "Tollgate Islands Race 2026"  # the title still comes from YB

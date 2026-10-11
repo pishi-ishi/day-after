@@ -23,7 +23,7 @@ def test_synthetic_route_table(tmp_path):
     r = read_route_table(path)
     assert r.model == "ECMWF" and r.grib_cycle == "15_1900"
     assert r.tz == "Australia/Sydney"
-    assert fmt_local(r.start, r.tz, "%d %b %H:%M %Z") == "16 Oct 14:00 AEDT"
+    assert fmt_local(r.start, r.tz, "%d %b %H:%M %Z") == "16 Oct 17:00 AEDT"
     assert len(r) == len(rows)
     # magnetic -> true with the latitude table (about 12.8-13.3 degrees east on this course)
     assert 12.7 < r.get("twd")[0] - 25.0 < 13.4
