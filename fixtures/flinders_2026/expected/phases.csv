@@ -1,0 +1,8 @@
+phase,from,to,min,dist_nm,avgSOG,avgSTWcorr,TWS,TWS95,TWD
+Start → South Head,10:00,10:34,34,3.53,6.29,5.15,6.9,9.1,26.0
+Hole at the Heads,10:30,10:57,28,1.05,2.28,0.14,3.5,6.0,67.0
+South Head → Cape Banks,10:34,12:21,107,12.58,7.07,6.04,12.1,19.9,12.0
+Cape Banks → Flinders Islet,12:21,16:00,219,35.77,9.8,9.05,19.2,27.2,25.0
+Rounding → southerly arrives,16:00,17:05,65,6.2,5.74,5.31,11.5,17.4,12.0
+Southerly → Cape Banks,17:05,20:31,206,34.78,10.11,9.92,30.9,41.2,164.0
+Cape Banks → finish point,20:31,21:43,72,11.88,9.88,9.8,30.0,39.7,159.0

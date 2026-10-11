@@ -1,0 +1,19 @@
+# private race data: never commit
+data/
+*.dayafter.json
+season*.sqlite
+# python / build
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.pytest_cache/
+# generated reports and caches
+out/
+reports/
+tiles/
+*.log
+.DS_Store
+Thumbs.db

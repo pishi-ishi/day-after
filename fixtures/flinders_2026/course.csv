@@ -1,0 +1,15 @@
+seq,name,lat,lon,role,note
+0,Start,-33.860650,151.247600,start,
+1,LB,-33.833333,151.277000,waypoint,
+2,South Head,-33.831250,151.280750,waypoint,
+3,Dunbar,-33.847667,151.289800,waypoint,
+4,Ben Buckler,-33.890367,151.289900,waypoint,
+5,Cape Banks,-34.000533,151.257017,waypoint,
+6,FI W,-34.455873,150.926988,turning_mark,"Flinders Islet rounding (W, S, E points from Expedition route)"
+7,FI S,-34.458548,150.929517,turning_mark,"Flinders Islet rounding (W, S, E points from Expedition route)"
+8,FI E,-34.456388,150.932727,turning_mark,"Flinders Islet rounding (W, S, E points from Expedition route)"
+9,Cape Banks (ret),-34.000533,151.257017,waypoint,
+10,Ben Buckler (ret),-33.890367,151.289900,waypoint,
+11,Dunbar (ret),-33.847667,151.289800,waypoint,
+12,South Head (ret),-33.831250,151.280750,waypoint,
+13,Finish,-33.841135,151.274383,finish,
