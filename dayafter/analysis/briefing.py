@@ -66,6 +66,17 @@ class Briefing:
         tm = self.course.turning_mark
         return tm.name if tm else ""
 
+    @property
+    def turning_label(self) -> str:
+        return turning_label(self.turning_name)
+
+
+def turning_label(name: str) -> str:
+    """How the crew text names the turning mark: Windy GPX points are bare numbers."""
+    if not name:
+        return "the turning mark"
+    return f"the turning mark (point {name})" if name.strip().isdigit() else name
+
 
 # ---------------------------------------------------------------------------------------------- helpers
 
@@ -232,7 +243,7 @@ def callouts(plan_route: RouteTable, change: weather.Change | None, eta: float |
     return sorted(out, key=lambda c: c["t"])
 
 
-def change_window(plans: list[ModelPlan], tz: str, turning: str) -> dict | None:
+def change_window(plans: list[ModelPlan], tz: str, turning: str, has_turning: bool = True) -> dict | None:
     with_change = [p for p in plans if p.change is not None]
     if not with_change:
         return None
@@ -242,8 +253,11 @@ def change_window(plans: list[ModelPlan], tz: str, turning: str) -> dict | None:
     before = [p.model for p in with_change if p.eta_turning is not None and p.eta_turning < p.change.t]
     after = [p.model for p in with_change if p.eta_turning is not None and p.eta_turning >= p.change.t]
     n = len(before) + len(after)
-    if n == 0:
-        verdict = "The routes do not reach the turning mark, so there is no rounding-versus-change comparison."
+    if n == 0 and not has_turning:
+        verdict = ("No turning mark was identified (name it as course.turning_mark in race.dayafter.json), so "
+                   "there is no rounding-versus-change comparison.")
+    elif n == 0:
+        verdict = f"The routes do not pass {turning}, so there is no rounding-versus-change comparison."
     elif not after:
         verdict = f"Every model has us rounding {turning} before the change arrives."
     elif not before:
@@ -274,6 +288,9 @@ def finish_table(routes: list[RouteTable], summaries: list[RouteSummary], gun: f
 
 def _choose_course(inputs: detect.Inputs, proj: dict, first_route: RouteTable | None,
                    warnings: list[str]) -> course_mod.Course:
+    """Course, best first: marks.xml route named in the race file, course.csv, the marks the routing reached
+    (when it names at least three), a GPX file, Expedition's active marks.xml route if it starts where the
+    routes start, else whatever marks the routing named."""
     route_name = (proj.get("course") or {}).get("marks_route") or ""
     if route_name and inputs.marks_xml:
         try:
@@ -282,12 +299,20 @@ def _choose_course(inputs: detect.Inputs, proj: dict, first_route: RouteTable | 
             warnings.append(str(e))
     if inputs.course_csv:
         return course_mod.read_course_csv(inputs.course_csv[0])
-    if first_route is not None and first_route.mark_rows():
-        return course_mod.course_from_route(first_route)
+    from_route = course_mod.course_from_route(first_route) if first_route is not None else None
+    if from_route is not None and len(from_route.marks) >= 3:
+        return from_route
     if inputs.gpx:
         return course_mod.read_gpx(inputs.gpx[0])
-    if inputs.marks_xml:
-        return course_mod.read_marks_xml(inputs.marks_xml[0])
+    if inputs.marks_xml and first_route is not None:
+        try:
+            c = course_mod.read_marks_xml(inputs.marks_xml[0])
+            if c.marks and geo.haversine_nm(c.marks[0].lat, c.marks[0].lon, first_route.lat[0], first_route.lon[0]) < 5:
+                return c
+        except KeyError:
+            pass
+    if from_route is not None and from_route.marks:
+        return from_route
     return course_mod.Course(name="(no course)", marks=[], source="")
 
 
@@ -380,6 +405,7 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
         except Exception as e:  # noqa: BLE001 - decoration only
             warnings.append(f"racenotes not read: {e}")
     turning = course.turning_mark.name if course.turning_mark else ""
+    label = turning_label(turning)
 
     gun, gun_source = _gun(proj, inputs, routes, tz)
 
@@ -400,7 +426,7 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
         stats = plan_stats(r)
         plans.append(ModelPlan(model=r.model, route=r, marks=marks, eta_turning=eta, change=ch,
                                sail_runs=sail_runs(r), manoeuvres=manoeuvres(r), shifts=weather.hourly_shifts(grid),
-                               callouts=callouts(r, ch, eta, turning or "the turning mark", stats, tz), stats=stats))
+                               callouts=callouts(r, ch, eta, label, stats, tz), stats=stats))
 
     notes = ""
     for p in inputs.notes:
@@ -412,7 +438,7 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
     return Briefing(
         folder=os.path.abspath(folder), race_name=name, boat=(proj.get("boat") or {}).get("name") or "", tz=tz,
         gun=gun, gun_source=gun_source, plans=plans, other_routes=other_routes, summaries=summaries, course=course,
-        islands=islands, window=change_window(plans, tz, turning or "the turning mark"),
+        islands=islands, window=change_window(plans, tz, label, bool(turning)),
         finishes=finish_table(routes, summaries, gun), variation_text=magvar.describe(all_var, var_override),
         notes=notes.strip(), warnings=warnings,
     )

@@ -146,6 +146,9 @@ def fetch_race(key: str, out_folder: str, *, log=print) -> dict[str, str]:
     tracks = decode_allpositions3(data)
     n_fix = sum(len(t.t) for t in tracks.values())
     log(f"saved {path} ({len(data):,} bytes, {len(tracks)} trackers, {n_fix:,} fixes)")
+    if n_fix == 0:
+        log("warning: YB has no positions for this key yet (race not started, or trackers not live). "
+            "Fetch again after the finish.")
     saved["positions"] = path
     try:
         setup = net.http_get(SETUP_URL.format(key=key), log=log)

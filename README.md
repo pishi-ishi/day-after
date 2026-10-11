@@ -11,7 +11,7 @@ Day After reads your Expedition instrument log, the optimal routes and GRIB fore
 
 Reports come in four editions (navigator, skipper/owner, crew and a branded 7 Seas Marine client edition). A **Day Before** mode turns the routings into a crew weather briefing: meteograms, the window when a change could arrive vs your ETA at the turning mark, the planned sail changes and the expected tacks and gybes.
 
-> **Status: design complete, build starting.** No release yet. See [`HANDOVER.md`](HANDOVER.md) for the build plan and [`docs/DESIGN.md`](docs/DESIGN.md) for the design.
+> **Status: the Day Before crew briefing works (run it from source, below).** The post-race report, the browser app and the downloadable binaries are being built; see [`HANDOVER.md`](HANDOVER.md) for the plan and [`docs/DESIGN.md`](docs/DESIGN.md) for the design.
 
 ## Planned download
 
@@ -29,6 +29,42 @@ Run it and Day After opens in your web browser at `http://127.0.0.1:<port>`. Clo
 
 1. **Before the race**: export a routing table per model from Expedition and run **Day Before** for the crew briefing.
 2. **After the race**: collect the log, the YB race key, the results and the BOM observations (see [`docs/DATA_GUIDE.md`](docs/DATA_GUIDE.md)), point Day After at the race folder and press **Build**.
+
+## Use it now (from source)
+
+Until the binaries are released, run Day After from a checkout with Python 3.12 (on Windows, use WSL2):
+
+```bash
+git clone https://github.com/pishi-ishi/day-after && cd day-after
+uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e .
+.venv/bin/dayafter --help
+```
+
+**Day Before (race eve and race morning).** Export one routing table per model from Expedition, plus the "summary of all routes", into the race folder (any layout works; Day After finds files by content), then:
+
+```bash
+.venv/bin/dayafter before "/mnt/c/.../Tollgate_Islands_2026(llama_II)" --open
+```
+
+It writes `out/day_before_<race>.html` in that folder: one file that opens offline on phones and laptops, ready to send to the crew. Options: `--models ECMWF,GFS,ACCESS` (at most three are shown; the default picks ECMWF, GFS, ACCESS when present) and `--turning-mark "TG South"`. Settings that cannot be read from the files go in an optional `race.dayafter.json` in the race folder:
+
+```json
+{
+  "race": {"name": "Tollgate Islands Race 2026", "gun_local": "2026-10-16T14:00:00", "tz": "Australia/Sydney"},
+  "boat": {"name": "Llama II"},
+  "course": {"turning_mark": "TG South"},
+  "crew_models": ["ECMWF", "GFS", "ACCESS"]
+}
+```
+
+**After the race (same day, then within 72 h).** Save the fleet tracks and the coastal observations before they disappear:
+
+```bash
+.venv/bin/dayafter fetch-yb bwps2026_2 "<race folder>/fleet"
+.venv/bin/dayafter fetch-bom 95768 94780 95752 94749 95745 95749 95940 94751 94938 95937 94939 --out "<race folder>/obs"
+```
+
+`dayafter selftest` checks a build against the Flinders Islet 2026 numbers in [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md).
 
 ## Documentation
 

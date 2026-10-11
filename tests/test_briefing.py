@@ -79,3 +79,24 @@ def test_cli_reports_missing_route_tables(tmp_path, capsys):
 @pytest.mark.parametrize("check", [c for _, c in selftest.CHECKS], ids=[n for n, _ in selftest.CHECKS])
 def test_flinders_acceptance(check):
     check()
+
+
+def test_gpx_course_when_the_routing_names_few_marks(tmp_path):
+    """Route tables that name only start and finish fall back to the GPX course; numbered points read well."""
+    routes = tmp_path / "routes"
+    routes.mkdir()
+    rows = tollgate_like_rows(change_at=dt.datetime(2026, 10, 16, 23, 0))
+    for r in rows:
+        r["mark"] = ""
+    rows[0]["mark"], rows[-1]["mark"] = "Start", "Finish"
+    (routes / "ECMWF_15_1900_15oct2026.csv").write_text(route_table_text(rows, model="ECMWF"), encoding="utf-8")
+    (tmp_path / "course.gpx").write_text(
+        '<?xml version="1.0"?><gpx xmlns="http://www.topografix.com/GPX/1/1"><rte>'
+        '<rtept lat="-33.8558" lon="151.2535"><name>1</name></rtept><rtept lat="-35.1" lon="150.83"><name>2</name></rtept>'
+        '<rtept lat="-35.755" lon="150.258"><name>3</name></rtept><rtept lat="-33.842" lon="151.274"><name>4</name></rtept>'
+        '</rte></gpx>')
+    b = build_briefing(str(tmp_path))
+    assert b.course.source.endswith("course.gpx")
+    assert b.turning_label == "the turning mark (point 3)"
+    assert fmt_local(b.plans[0].eta_turning, b.tz, "%H:%M") == "21:30"
+    assert any("point 3" in c["text"] for c in b.plans[0].callouts)

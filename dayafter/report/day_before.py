@@ -172,7 +172,7 @@ def _signs_text(p: ModelPlan, f: _Fmt) -> str:
 
 def render(b: Briefing) -> str:
     f = _Fmt(b)
-    turning = b.turning_name or "the turning mark"
+    turning = b.turning_label
     models = [p.model for p in b.plans]
     gun_label = timeutil.utc_offset_label(b.gun, b.tz)
 
@@ -224,9 +224,9 @@ def render(b: Briefing) -> str:
                 for i, t in enumerate(r.t)]
         table = _table(["Time", "Mark", "Wind kt", "Gust kt", "Dir °T", "TWA", "hPa", "Air °C", "Rain mm/h", "Sail"],
                        rows, num_cols={0, 2, 3, 4, 5, 6, 7, 8})
-        callouts = "".join(f'<li><span class="when">{H.esc(f.hm(c["t"]))}</span> {H.esc(c["text"])}</li>' for c in p.callouts)
-        meta = (f"run {f.run(r.created)} · {timeutil.fmt_duration(r.finish - b.gun)} elapsed · finish {f.when(r.finish)}"
-                if r.created else f"finish {f.when(r.finish)}")
+        callouts = "".join(f'<li><span class="when">{H.esc(f.when(c["t"]))}</span> {H.esc(c["text"])}</li>' for c in p.callouts)
+        meta = (f"run {f.run(r.created)} · {_dur(r.finish - b.gun)} elapsed · finish {f.when(r.finish)}"
+                if r.created else f"{_dur(r.finish - b.gun)} elapsed · finish {f.when(r.finish)}")
         missing = [] if r.has("airt") else ["air temperature"]
         note = f" This routing has no {', '.join(missing)}." if missing else ""
         met_blocks.append(
