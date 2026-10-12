@@ -15,6 +15,7 @@ from ..analysis.race_analysis import RaceAnalysis
 from ..analysis.weather import compass
 from ..core import geo, timeutil
 from . import html as H
+from .perf_section import perf_data, performance_section, season_section
 
 STATUS = {"ok": ("✓", "OK", "good"), "info": ("i", "Info", "info"), "warn": ("!", "Check", "warning"),
           "fail": ("✕", "Fix", "critical")}
@@ -111,6 +112,7 @@ def build_data(a: RaceAnalysis) -> dict:
         "land": land, "coast": coast, "islands": islands,
         "fleet": fleet_data(a),
         "grib": grib_data(a),
+        "perf": perf_data(a),
     }, 5)
 
 
@@ -216,7 +218,7 @@ def _check_card(c) -> str:
             f'<span class="check-value">{H.esc(c.value)}</span></div><p>{H.esc(c.detail)}</p>{fix}</div>')
 
 
-def render(a: RaceAnalysis) -> str:
+def render(a: RaceAnalysis, season: dict | None = None) -> str:
     tz = a.tz
     hm = lambda t: timeutil.fmt_local(t, tz, "%H:%M") if t is not None else "–"
     hms = lambda t: timeutil.fmt_local(t, tz, "%H:%M:%S") if t is not None else "–"
@@ -335,8 +337,9 @@ def render(a: RaceAnalysis) -> str:
     ]
     warns = "".join(f"<li>{H.esc(x)}</li>" for x in a.warnings)
     toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
-                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("fleet", "Fleet"), ("calibration", "Calibration"),
-                   ("data", "Data & method")])
+                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("fleet", "Fleet"),
+                   ("performance", "Performance"), ("calibration", "Calibration")]
+                  + ([("season", "Season")] if season and season.get("races") else []) + [("data", "Data & method")])
     category = (a.project.get("race") or {}).get("category") or ""
     body = f"""
 <header class="wrap cover">
@@ -379,12 +382,14 @@ def render(a: RaceAnalysis) -> str:
   {fin_table}
 </section>
 {fleet_html}
+{performance_section(a)}
 <section id="calibration" class="wrap">
   <h2>Calibration</h2>
   <p class="lede">Checks on the instruments from the race itself. The corrections are applied in this report; fix them
   in the instrument system before the next race.</p>
   <div class="checks">{checks_html}</div>
 </section>
+{season_section(season, a)}
 <section id="data" class="wrap">
   <h2>Data & method</h2>
   <ul>{"".join(f"<li>{H.esc(x)}</li>" for x in inputs)}</ul>
@@ -463,11 +468,11 @@ def filename(a: RaceAnalysis) -> str:
     return f"day_after_{_slug(a.race_name)}_navigator.html"
 
 
-def write(a: RaceAnalysis, out: str | None = None) -> str:
+def write(a: RaceAnalysis, out: str | None = None, season: dict | None = None) -> str:
     if out is None:
         out = os.path.join(a.folder, "out", filename(a))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    text = render(a)
+    text = render(a, season)
     tmp = out + ".part"
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(text)

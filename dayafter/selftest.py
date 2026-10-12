@@ -385,6 +385,61 @@ def check_day_before_gribs() -> str:
     return f"GRIB models along the {b.gribs['route_model']} route: {', '.join(models)} (08:34 download, the last before the gun)"
 
 
+# --------------------------------------------------------------------------------------------- M4: performance, season
+
+PHASE_MAP = {"Heads → Cape Banks": "South Head → Cape Banks", "Cape Banks → FI": "Cape Banks → Flinders Islet",
+             "Post-rounding beat": "Flinders Islet → the change", "Southerly run": "the change → Cape Banks (ret)",
+             "Cape Banks → finish": "Cape Banks (ret) → finish point"}
+
+
+def check_polar_by_phase() -> str:
+    a = _analysis()
+    p = a.performance
+    assert p is not None, "no performance analysis"
+    by = {x.name: x for x in p.phases}
+    worst = 0.0
+    for e in _expected("polar_by_phase.csv"):
+        x = by[PHASE_MAP[e["phase"]]]
+        d = abs(x.pct_logged - float(e["pct"]))
+        assert d <= 2.0, (e["phase"], x.pct_logged, e["pct"])
+        if e["phase"] in ("Heads → Cape Banks", "Cape Banks → FI", "Southerly run"):  # same windows as ours
+            assert abs(x.twa - float(e["absTWA"])) <= 3 and abs(x.tws - float(e["TWS"])) <= 1, (e["phase"], x.twa, x.tws)
+        worst = max(worst, d)
+    beat = by[PHASE_MAP["Post-rounding beat"]]
+    assert p.twa_source == "recomputed upwind", p.twa_source
+    assert abs(beat.pct - 84) <= 2 and abs(beat.vmg_pct - 78) <= 2, (beat.pct, beat.vmg_pct)
+    assert by[PHASE_MAP["Southerly run"]].indicative and not by[PHASE_MAP["Cape Banks → FI"]].indicative
+    return (f"5 phases within {worst:.1f} pts of polar_by_phase.csv (logged TWA); post-rounding beat with recomputed TWA "
+            f"{beat.pct:.0f} % of polar speed, {beat.vmg_pct:.0f} % of target VMG; > 24 kt marked indicative")
+
+
+def check_manoeuvres() -> str:
+    a = _analysis()
+    ms = a.performance.manoeuvres
+    tacks = [m for m in ms if m.kind == "tack"]
+    gybes = [m for m in ms if m.kind == "gybe"]
+    assert len(tacks) >= 8 and len(gybes) >= 5, (len(tacks), len(gybes))
+    assert all(ms[i].loss_m >= ms[i + 1].loss_m for i in range(len(ms) - 1))
+    w = ms[0]
+    return f"{len(tacks)} tacks, {len(gybes)} gybes; worst: {w.kind} at {_hm(w.t)} ({w.loss_m:.0f} m in {w.tws:.0f} kt)"
+
+
+def check_season() -> str:
+    from . import season
+    a = _analysis()
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "season.sqlite")
+        rid = season.store(a, a.performance, db)
+        season.store(a, a.performance, db)  # re-running a race replaces it
+        s = season.load(db)
+    assert [r["race_id"] for r in s["races"]] == [rid], s["races"]
+    r = s["races"][0]
+    assert r["place"] == 15 and abs(r["k"] - 1.258) < 0.01 and r["twa_source"] == "recomputed upwind"
+    assert {m["model"] for m in s["models"]} >= {"ECMWF", "GFS", "ACCESS"}
+    assert {x["boat"] for x in s["rivals"]} == {"Calibre 12", "Kanreki", "Ragtime"}
+    return f"{rid}: stored once after two runs; {len(s['models'])} model verifications, {len(s['rivals'])} rivals"
+
+
 CHECKS = [
     ("time zones and durations", check_time_zones),
     ("YB decoder test vector", check_yb_vector),
@@ -406,6 +461,9 @@ CHECKS = [
     ("M3 forecast at our position", check_forecast_at_us),
     ("M3 crew edition", check_crew_edition),
     ("M3 Day Before with GRIBs", check_day_before_gribs),
+    ("M4 polar by phase", check_polar_by_phase),
+    ("M4 manoeuvres", check_manoeuvres),
+    ("M4 season database", check_season),
 ]
 
 

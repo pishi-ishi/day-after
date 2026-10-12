@@ -169,6 +169,75 @@
     }));
   }
 
+  // ------------------------------------------------------------ performance: polar %, targets, manoeuvres
+  const PF = D.perf;
+  if (PF) {
+    const SIDES = [
+      { pos: "upwind", label: "upwind", dash: null, marker: "circle" },
+      { pos: "reach", label: "reach", dash: "6 3", marker: "square" },
+      { pos: "downwind", label: "downwind", dash: "2 2", marker: "triangle" },
+    ];
+    const pp = host("#chart-polarpct .chart-body");
+    if (pp && PF.buckets.length) {
+      DA.legend(host("#chart-polarpct .legend"), SIDES.map((s) => ({ label: s.label, color: BOAT, dash: s.dash, marker: s.marker })));
+      const mids = [...new Set(PF.buckets.map((b) => b.tws0 + 1))].sort((a, b) => a - b);
+      const ser = SIDES.map((s) => {
+        const bs = PF.buckets.filter((b) => b.pos === s.pos);
+        return { name: s.label, x: bs.map((b) => b.tws0 + 1), y: bs.map((b) => Math.round(b.pct)), color: BOAT, dash: s.dash, marker: s.marker };
+      }).filter((s) => s.x.length);
+      DA.mount(pp, () => DA.xyLines(pp, {
+        x0: Math.max(0, mids[0] - 1), x1: mids[mids.length - 1] + 1, height: 260, y0: 80, y1: 105, ref: 100, endLabels: true,
+        endFmt: (v) => `${v} %`, yLabel: "% of polar speed (median)", xLabel: "true wind speed, kt",
+        vlines: PF.tws_max < mids[mids.length - 1] ? [{ x: PF.tws_max, label: `polar ends ${PF.tws_max} kt` }] : [],
+        series: ser, snap: mids, aria: "Polar percentage by wind speed and point of sail",
+        tip: (k) => ({ head: `${mids[k] - 1}–${mids[k] + 1} kt${mids[k] > PF.tws_max ? " (indicative)" : ""}`, rows: SIDES.map((s) => {
+          const b = PF.buckets.find((x) => x.pos === s.pos && x.tws0 + 1 === mids[k]);
+          return { name: s.label, color: BOAT, value: b ? `${Math.round(b.pct)} % · ${Math.round(b.n / 60)} min` : "–" };
+        }) }),
+      }));
+    }
+    const tg = host("#chart-targets .chart-body");
+    if (tg && PF.targets.length) {
+      DA.legend(host("#chart-targets .legend"), [{ label: "ours (best 75–95 % of VMG)", color: BOAT, marker: "circle" },
+        { label: "polar target", color: "var(--muted)", dash: "5 4", marker: "diamond" }]);
+      const mids = [...new Set(PF.targets.map((x) => x.tws0 + 1))].sort((a, b) => a - b);
+      const ser = [];
+      for (const side of ["upwind", "downwind"]) {
+        const xs = PF.targets.filter((x) => x.side === side);
+        if (!xs.length) continue;
+        ser.push({ name: `polar ${side}`, x: xs.map((x) => x.tws0 + 1), y: xs.map((x) => Math.round(x.polar_twa)), color: "var(--muted)", dash: "5 4", marker: "diamond" });
+        ser.push({ name: `ours ${side}`, x: xs.map((x) => x.tws0 + 1), y: xs.map((x) => Math.round(x.twa)), color: BOAT, marker: "circle" });
+      }
+      DA.mount(tg, () => DA.xyLines(tg, {
+        x0: Math.max(0, mids[0] - 1), x1: mids[mids.length - 1] + 1, height: 280, y0: 30, y1: 180, yLabel: "true wind angle, °",
+        xLabel: "true wind speed, kt", series: ser, snap: mids, aria: "Target wind angles, ours against the polar",
+        vlines: PF.tws_max < mids[mids.length - 1] ? [{ x: PF.tws_max, label: `polar ends ${PF.tws_max} kt` }] : [],
+        tip: (k) => ({ head: `${mids[k] - 1}–${mids[k] + 1} kt`, rows: PF.targets.filter((x) => x.tws0 + 1 === mids[k]).flatMap((x) => [
+          { name: `${x.side}: ours`, color: BOAT, value: `${Math.round(x.twa)}° · ${x.stw.toFixed(1)} kt · VMG ${x.vmg.toFixed(1)}` },
+          { name: `${x.side}: polar`, color: "var(--muted)", value: `${Math.round(x.polar_twa)}° · ${x.polar_stw.toFixed(1)} kt · VMG ${x.polar_vmg.toFixed(1)}` }]) }),
+      }));
+    }
+    const mn = host("#chart-manoeuvres .chart-body");
+    if (mn && PF.manoeuvres.length) {
+      DA.legend(host("#chart-manoeuvres .legend"), [{ label: "tack", kind: "dot", marker: "circle", color: BOAT },
+        { label: "gybe", kind: "dot", marker: "diamond", color: BOAT }]);
+      const ws = PF.manoeuvres.map((m) => m.tws);
+      const x0 = Math.floor(Math.min(...ws) / 5) * 5, x1 = Math.ceil(Math.max(...ws) / 5) * 5;
+      const ticks = [];
+      for (let v = x0; v <= x1; v += 5) ticks.push({ x: v, label: String(v) });
+      const worst = PF.manoeuvres.slice(0, 3);
+      DA.mount(mn, () => DA.scatter(mn, {
+        x0, x1, xTicks: ticks, height: 260, yLabel: "loss, m (along the wind)", xLabel: "true wind speed, kt",
+        aria: "Loss in metres per tack and gybe against the wind speed",
+        points: PF.manoeuvres.map((m) => ({ x: m.tws, y: m.loss_m, color: BOAT, shape: m.kind === "tack" ? "circle" : "diamond", r: 5,
+          label: worst.includes(m) ? `${m.kind} ${hm(m.t)}` : null, head: `${m.kind} ${hm(m.t)}`,
+          tip: [{ name: "loss", value: `${Math.round(m.loss_m)} m · ${Math.round(m.loss_s)} s` },
+            { name: "speed", value: `${m.stw_before.toFixed(1)} → ${m.stw_min.toFixed(1)} kt` },
+            { name: "wind", value: `${Math.round(m.tws)} kt` }] })),
+      }));
+    }
+  }
+
   // ------------------------------------------------------------ fleet
   const FL = D.fleet;
   if (FL) {

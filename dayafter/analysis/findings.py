@@ -181,6 +181,21 @@ def findings(a: RaceAnalysis) -> list[Finding]:
                                   f"and sailed home {min(gains):.1f}–{max(gains):.1f} h faster than us on corrected time."
                                   if gains and min(gains) > 0 else ""), 0.85))
 
+    # speed against the polar
+    pf = a.performance
+    if pf is not None and pf.phases:
+        legs = [x for x in pf.phases if x.kind == "leg"]
+        if legs:
+            overall = float(np.average([x.pct for x in legs], weights=[x.n for x in legs]))
+            worst = min(legs, key=lambda x: x.pct)
+            vmg = f" ({worst.vmg_pct:.0f} % of the polar's upwind VMG)" if worst.vmg_pct is not None else ""
+            text = (f"{overall:.0f} % of polar speed over the race; the weakest leg was {worst.name} at "
+                    f"{worst.pct:.0f} %{vmg}.")
+            if pf.manoeuvres:
+                m = pf.manoeuvres[0]
+                text += f" The costliest manoeuvre was the {m.kind} at {hm(m.t)} in {m.tws:.0f} kt ({m.loss_m:.0f} m)."
+            out.append(Finding("performance", "Speed against the polar", text, 0.7 if worst.pct < 90 else 0.5))
+
     # calibration
     fixes = []
     for c in a.checks:

@@ -58,6 +58,7 @@ class RaceAnalysis:
     polar: Polar | None
     fleet: fleet_mod.Fleet | None = None
     forecast: forecast_mod.ForecastAtUs | None = None   # GRIB models at our position
+    performance: object | None = None                    # performance.Performance
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -249,7 +250,7 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
         warnings.append(f"fleet comparison skipped: {e}")
 
     name = race_cfg.get("name") or _yb_title(inputs) or os.path.basename(os.path.abspath(folder)).replace("_", " ")
-    return RaceAnalysis(
+    ra = RaceAnalysis(
         folder=os.path.abspath(folder), project=proj, inputs=inputs, tz=tz, race_name=name, boat=boat_name, gun=gun,
         gun_source=gun_source, start=start, finish=finish, finish_source=finish_source,
         finish_point=fin_pass.t if fin_pass else None, result=me, results=results, course=course, line=line,
@@ -257,6 +258,14 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
         phases=ph, routes=routes, all_routes=all_routes, summaries=summaries, splits=spl, forecasts=fcs,
         model_rank=plan.rank_models(fcs), events=events_mod.in_window(evs, gun - 3600, finish + 3600), polar=polar,
         fleet=fl, forecast=fa, warnings=warnings)
+    if polar is not None:
+        say("performance")
+        from . import performance as perf_mod
+        try:
+            ra.performance = perf_mod.performance(ra)
+        except Exception as e:  # noqa: BLE001 - keep the rest of the report
+            warnings.append(f"performance analysis skipped: {e}")
+    return ra
 
 
 def load_fleet(inputs: detect.Inputs, proj: dict, course: Course, gun: float, results, boat_name: str,

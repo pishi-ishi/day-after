@@ -70,7 +70,7 @@ It writes `out/day_before_<race>.html` in that folder: one file that opens offli
 .venv/bin/dayafter build "<race folder>" --open
 ```
 
-It writes one HTML file per edition into `out/`: the **navigator** edition (overview, phases, plan vs reality with the GRIB model scorecard, fleet, calibration) and the **crew** edition (the briefing's meteograms for the three best-verified models with what we actually measured on top, and the race's key moments). `--editions navigator` limits the set.
+It writes one HTML file per edition into `out/`: the **navigator** edition (overview, phases, plan vs reality with the GRIB model scorecard, fleet, performance against the polar, calibration, season) and the **crew** edition (the briefing's meteograms for the three best-verified models with what we actually measured on top, and the race's key moments). `--editions navigator` limits the set. Each build also stores the race in the season database (`season.sqlite` next to the app; `--season <file>` or `--no-season` to change that).
 
 `dayafter selftest` checks a build against the Flinders Islet 2026 numbers in [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md).
 

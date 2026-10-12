@@ -132,6 +132,8 @@ The hole (10:30–10:57) must be found by the hole detector (SOG < 3 kt ≥ 10 m
 
 \* above the polar's 24 kt row, so indicative only. The report quotes the post-rounding beat as **84 % of polar speed, 78 % of target VMG** using the recomputed TWA. The 73 % here uses the logged (wrong) TWA for the target. The app must use recomputed true wind when calibration flags the TWA error, and say so.
 
+> **Build notes (12 Oct 2026).** Polar % is computed per second (corrected STW ÷ polar speed at TWS and |TWA|) while the boat moves (corrected STW > 3 kt); a phase quotes the median and quartiles. That reproduces the table with the logged TWA: 94.2, 101.0, 73.9, 93.8 and 94.2 % against 94.2, 101.2, 73.3, 94.2 and 96.0 (worst 1.8 points; Day After's phases are the M1 legs, so Cape Banks → finish includes the closing beat, |TWA| 136° instead of 154°). Because calibration flags the upwind TWA, the report uses recomputed true wind for upwind seconds: the post-rounding beat is **85 % of polar speed and 79 % of target VMG** (the report's 84 % and 78 %), with the logged-TWA figure in its own column. Manoeuvres: 11 tacks and 7 gybes; the costliest was the gybe at 21:18 in 31 kt (189 m). No sail changes were logged as events at Flinders, so the by-sail view waits for Tollgate. The season database holds Flinders; the Tollgate run adds the second race (and the Season views' head-to-head) after 16 Oct.
+
 ## M5: packaging
 
 `dayafter --selftest` builds all editions for Flinders from `data/` and `fixtures/`, checks the numbers above, and exits non-zero on failure. It skips with a clear message when `data/` is absent (CI).

@@ -619,7 +619,8 @@ const DA = (() => {
 
   // ------------------------------------------------------------------ x-y lines (e.g. minutes vs distance)
   /* spec = {x0, x1, xTicks?:[{x, label}], xFmt?, yLabel, yFmt?, zero?, height?, series:[{name, x:[], y:[], color,
-     dash?, marker?}], vlines:[{x, label}], snap:[x...], tip:(k)=>({head, rows}), endLabels?, aria} */
+     dash?, marker?}], vlines:[{x, label}], snap:[x...], tip:(k)=>({head, rows}), endLabels?, y0?, y1? (domain at
+     least this wide), ref? (a y value drawn as a stronger grid line, e.g. 100 %), aria} */
   function xyLines(root, spec) {
     root.textContent = "";
     const W = Math.max(300, root.clientWidth);
@@ -628,11 +629,13 @@ const DA = (() => {
     const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": spec.aria || "chart" }, root);
     const x = linear(spec.x0, spec.x1, m.l, W - m.r);
     const ext = extent(spec.series.map((s) => s.y)) || [0, 1];
-    const lo = spec.zero ? Math.min(0, ext[0]) : ext[0], hi = spec.zero ? Math.max(0, ext[1]) : ext[1];
+    let lo = spec.zero ? Math.min(0, ext[0]) : ext[0], hi = spec.zero ? Math.max(0, ext[1]) : ext[1];
+    if (fin(spec.y0)) lo = Math.min(lo, spec.y0);
+    if (fin(spec.y1)) hi = Math.max(hi, spec.y1);
     const ticks = niceTicks(lo, hi, 5);
     const y = linear(ticks[0], ticks[ticks.length - 1], H - m.b, m.t);
     for (const v of ticks) {
-      paint(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg), v === 0 && spec.zero ? "var(--ink-2)" : "var(--grid)", null,
+      paint(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg), (v === 0 && spec.zero) || v === spec.ref ? "var(--ink-2)" : "var(--grid)", null,
         { strokeWidth: "1px" });
       text(svg, m.l - 6, y(v) + 4, spec.yFmt ? spec.yFmt(v) : String(v), { "text-anchor": "end" });
     }

@@ -64,7 +64,8 @@ def cmd_build(args) -> int:
     out_dir = None
     if args.out:
         out_dir = args.out if not args.out.lower().endswith(".html") else os.path.dirname(os.path.abspath(args.out))
-    paths = editions_mod.write_editions(a, eds, out_dir, log=lambda m: print(f"  {m}"))
+    paths = editions_mod.write_editions(a, eds, out_dir, log=lambda m: print(f"  {m}"), season_path=args.season,
+                                        use_season=not args.no_season)
     print(f"Day After for {a.race_name}: {a.boat}, {a.result.place if a.result and a.result.place else '?'}"
           f" of {sum(r.finished for r in a.results) or '?'}")
     for w in a.warnings:
@@ -131,6 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--race-file", help="race.dayafter.json to use instead of the one in the folder")
     d.add_argument("--editions", help="editions to write, comma-separated (default: all: navigator,crew)")
     d.add_argument("--out", help="output folder (default: <folder>/out)")
+    d.add_argument("--season", help="season database (default: season.sqlite next to the app, or $DAYAFTER_SEASON)")
+    d.add_argument("--no-season", action="store_true", help="do not store this race in the season database")
     d.add_argument("--open", action="store_true", help="open the report in the browser")
     d.set_defaults(func=cmd_build)
 

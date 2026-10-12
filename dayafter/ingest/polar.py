@@ -36,7 +36,7 @@ class Polar:
         ts = np.clip(tws, 0.0, self.tws[-1])
         i = np.clip(np.searchsorted(self.tws, ts, side="right") - 1, 0, len(self.tws) - 2)
         f = np.clip((ts - self.tws[i]) / (self.tws[i + 1] - self.tws[i]), 0.0, 1.0)
-        a0 = np.floor(a).astype(int)
+        a0 = np.floor(np.where(np.isfinite(a), a, 0.0)).astype(int)
         a1 = np.minimum(a0 + 1, 180)
         g = a - a0
         safe0 = np.where(np.isfinite(a), a0, 0)
