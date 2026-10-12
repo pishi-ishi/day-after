@@ -17,20 +17,7 @@
   const nearest = (ts, t) => { let b = 0; for (let i = 1; i < ts.length; i++) if (Math.abs(ts[i] - t) < Math.abs(ts[b] - t)) b = i; return b; };
   const host = (sel) => document.querySelector(sel);
 
-  // theme button: auto -> light -> dark
-  const btn = host(".theme-btn");
-  const store = { get() { try { return localStorage.getItem("da-theme"); } catch (e) { return null; } },
-                  set(v) { try { v ? localStorage.setItem("da-theme", v) : localStorage.removeItem("da-theme"); } catch (e) { /* private mode */ } } };
-  function applyTheme(v) {
-    if (v) document.documentElement.setAttribute("data-theme", v); else document.documentElement.removeAttribute("data-theme");
-    if (btn) btn.textContent = v === "dark" ? "Theme: dark" : v === "light" ? "Theme: light" : "Theme: auto";
-  }
-  applyTheme(store.get());
-  if (btn) btn.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme");
-    const next = cur === null ? "light" : cur === "light" ? "dark" : null;
-    store.set(next); applyTheme(next);
-  });
+  DA.themeButton(document.querySelector(".theme-btn"));
 
   const models = D.models;
   const tMin = Math.min(D.gun, ...models.map((m) => m.t[0]));
@@ -70,6 +57,7 @@
   for (const m of models) {
     const root = host(`#met-${m.model} .chart-body`);
     if (!root) continue;
+    const axm = DA.dirAxis(m.twd);
     const panels = [{
       label: "Wind speed, kt (dashed: gusts)", height: 104, zero: true,
       series: [
@@ -78,9 +66,8 @@
         { kind: "line", name: "Gust", t: m.t, y: m.twg, color: "var(--met-tws)", dash: "5 4", width: 1.5 },
       ],
     }, {
-      label: "Wind direction, ° true", height: 72, domain: [0, 360], ticks: [0, 90, 180, 270, 360],
-      fmt: (v) => ({ 0: "N", 90: "E", 180: "S", 270: "W", 360: "N" })[v],
-      series: [{ kind: "dots", name: "Direction", t: m.t, y: m.twd, color: "var(--met-tws)" }],
+      label: "Wind direction, ° true", height: 72, domain: axm.domain, ticks: axm.ticks, fmt: axm.fmt,
+      series: [{ kind: "dots", name: "Direction", t: m.t, y: m.twd.map(axm.wrap), color: "var(--met-tws)" }],
     }, {
       label: "Pressure, hPa", height: 84, minSpan: 4,
       series: [{ kind: "line", name: "Pressure", t: m.t, y: m.mslp, color: "var(--met-pressure)" }],
@@ -117,15 +104,15 @@
   if (cmp) {
     DA.legend(host("#chart-compare .legend"), models.map((m) => ({ label: m.model, color: style(m.model).color, dash: style(m.model).dash, marker: style(m.model).marker })));
     const snap = [...new Set(models.flatMap((m) => m.t))].sort((a, b) => a - b);
+    const axc = DA.dirAxis(...models.map((m) => m.twd));
     DA.mount(cmp, () => DA.timePanels(cmp, {
       t0: tMin, t1: tMax, snap, endLabels: true, aria: "Wind speed, direction and pressure along each model's route",
       vlines: [{ t: D.gun, label: "gun" }],
       panels: [
         { label: "Wind speed, kt", height: 110, zero: true,
           series: models.map((m) => ({ kind: "line", name: m.model, t: m.t, y: m.tws, color: style(m.model).color, dash: style(m.model).dash })) },
-        { label: "Wind direction, ° true", height: 84, domain: [0, 360], ticks: [0, 90, 180, 270, 360],
-          fmt: (v) => ({ 0: "N", 90: "E", 180: "S", 270: "W", 360: "N" })[v],
-          series: models.map((m) => ({ kind: "dots", name: m.model, t: m.t, y: m.twd, color: style(m.model).color, marker: style(m.model).marker })) },
+        { label: "Wind direction, ° true", height: 84, domain: axc.domain, ticks: axc.ticks, fmt: axc.fmt,
+          series: models.map((m) => ({ kind: "dots", name: m.model, t: m.t, y: m.twd.map(axc.wrap), color: style(m.model).color, marker: style(m.model).marker })) },
         { label: "Pressure, hPa", height: 84, minSpan: 4,
           series: models.map((m) => ({ kind: "line", name: m.model, t: m.t, y: m.mslp, color: style(m.model).color, dash: style(m.model).dash })) },
       ],

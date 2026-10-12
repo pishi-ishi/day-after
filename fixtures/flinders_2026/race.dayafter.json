@@ -1,0 +1,28 @@
+{
+  "race": {
+    "name": "Flinders Islet Race 2026",
+    "series": "Sydney Blue Water Pointscore 2026-27",
+    "tz": "Australia/Sydney",
+    "variation_deg_e": 12.8,
+    "category": "IRC All"
+  },
+  "boat": {
+    "name": "Llama II",
+    "tcc": 1.136,
+    "division": "2",
+    "polar": "../polars/llama2_polars_2026.txt"
+  },
+  "course": {
+    "turning_mark": "FI S",
+    "phase_marks": ["South Head", "Cape Banks", "FI S", "Cape Banks (ret)"],
+    "mark_labels": {"FI S": "Flinders Islet"},
+    "gate_step_nm": 5
+  },
+  "fleet": {
+    "yb_key": "bwps2026",
+    "rivals": ["Calibre 12", "Kanreki", "Ragtime"]
+  },
+  "editions": ["navigator", "skipper", "crew", "client"],
+  "crew_models": "auto",
+  "notes": {"navigator": "", "skipper": ""}
+}

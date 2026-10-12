@@ -122,40 +122,6 @@ def build_data(b: Briefing) -> dict:
 
 # ------------------------------------------------------------------------------------------- html
 
-def _table(headers: list[str], rows: list[list[str]], num_cols: set[int] = frozenset(), row_class=None,
-           stack: bool = False) -> str:
-    """An HTML table. `stack=True` turns rows into label/value cards on phones (data-label per cell)."""
-    th = "".join(f'<th class="num">{H.esc(h)}</th>' if i in num_cols else f"<th>{H.esc(h)}</th>" for i, h in enumerate(headers))
-    body = []
-    for k, r in enumerate(rows):
-        cls = f' class="{row_class(k)}"' if row_class and row_class(k) else ""
-        tds = "".join((f'<td class="num" data-label="{H.esc(headers[i])}">{c}</td>' if i in num_cols
-                       else f'<td data-label="{H.esc(headers[i])}">{c}</td>') for i, c in enumerate(r))
-        body.append(f"<tr{cls}>{tds}</tr>")
-    tcls = ' class="stack"' if stack else ""
-    return f'<div class="table-wrap"><table{tcls}><thead><tr>{th}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
-
-
-def _figure(fid: str, caption: str, table_html: str = "", table_label: str = "Table view") -> str:
-    tv = f'<details class="table-view"><summary>{H.esc(table_label)}</summary>{table_html}</details>' if table_html else ""
-    return (f'<figure class="chart" id="{fid}"><div class="legend"></div><div class="chart-body"></div>'
-            f'<figcaption>{caption}</figcaption>{tv}</figure>')
-
-
-def _num(v, dp=1) -> str:
-    return "–" if v is None or not np.isfinite(v) else f"{v:.{dp}f}"
-
-
-def _key(model: str) -> str:
-    var = {"GFS": "--m-gfs", "ECMWF": "--m-ecmwf", "ACCESS": "--m-access"}.get(model, "--m-other")
-    return f'<span class="swatch-line" style="border-top-color: var({var})"></span>'
-
-
-def _model_cell(model: str) -> str:
-    """Colour key and model name that stay on one line, also in the phone card layout."""
-    return f'<span class="nowrap">{_key(model)} {H.esc(model)}</span>'
-
-
 def _signs_text(p: ModelPlan, f: _Fmt) -> str:
     if p.change is None:
         return "–"
@@ -201,28 +167,28 @@ def render(b: Briefing) -> str:
     for p in b.plans:
         c = p.change
         if c is None:
-            change_rows.append([_model_cell(p.model), "none", "–", "–", "–", H.esc(f.when(p.eta_turning)), "–"])
+            change_rows.append([H.model_cell(p.model), "none", "–", "–", "–", H.esc(f.when(p.eta_turning)), "–"])
             continue
         rounds = "–"
         if p.eta_turning is not None:
             d = c.t - p.eta_turning
             rounds = f"{_dur(d)} {'before' if d > 0 else 'after'} the change"
         change_rows.append([
-            _model_cell(p.model), H.esc(f.when(c.t)),
+            H.model_cell(p.model), H.esc(f.when(c.t)),
             H.esc(f"{compass(c.twd_from)} {c.tws_before:.0f} kt → {compass(c.twd_to)} {c.tws_after:.0f} kt"),
             H.esc(f"{abs(c.swing):.0f}°"), _signs_text(p, f), H.esc(f.when(p.eta_turning)), H.esc(rounds)])
-    change_table = _table(["Model", "Change", "Wind before → after", "Shift", "Signs", f"At {turning}", "We round"],
+    change_table = H.table(["Model", "Change", "Wind before → after", "Shift", "Signs", f"At {turning}", "We round"],
                           change_rows, num_cols={1, 3, 5}, stack=True)
 
     # --- meteograms
     met_blocks = []
     for p in b.plans:
         r = p.route
-        rows = [[H.esc(f.when(t)), H.esc(r.mark[i]), _num(r.get("tws")[i]), _num(r.get("twg")[i]),
-                 _num(r.get("twd")[i], 0), _num(r.get("twa")[i], 0), _num(r.get("mslp")[i]),
-                 _num(r.get("airt")[i]), _num(r.get("rain")[i], 2), H.esc(r.sail_filled[i])]
+        rows = [[H.esc(f.when(t)), H.esc(r.mark[i]), H.num(r.get("tws")[i]), H.num(r.get("twg")[i]),
+                 H.num(r.get("twd")[i], 0), H.num(r.get("twa")[i], 0), H.num(r.get("mslp")[i]),
+                 H.num(r.get("airt")[i]), H.num(r.get("rain")[i], 2), H.esc(r.sail_filled[i])]
                 for i, t in enumerate(r.t)]
-        table = _table(["Time", "Mark", "Wind kt", "Gust kt", "Dir °T", "TWA", "hPa", "Air °C", "Rain mm/h", "Sail"],
+        table = H.table(["Time", "Mark", "Wind kt", "Gust kt", "Dir °T", "TWA", "hPa", "Air °C", "Rain mm/h", "Sail"],
                        rows, num_cols={0, 2, 3, 4, 5, 6, 7, 8})
         callouts = "".join(f'<li><span class="when">{H.esc(f.when(c["t"]))}</span> {H.esc(c["text"])}</li>' for c in p.callouts)
         meta = (f"run {f.run(r.created)} · {_dur(r.finish - b.gun)} elapsed · finish {f.when(r.finish)}"
@@ -230,7 +196,7 @@ def render(b: Briefing) -> str:
         missing = [] if r.has("airt") else ["air temperature"]
         note = f" This routing has no {', '.join(missing)}." if missing else ""
         met_blocks.append(
-            f'<article class="model" id="met-{H.esc(p.model)}"><h3>{_key(p.model)} {H.esc(p.model)} '
+            f'<article class="model" id="met-{H.esc(p.model)}"><h3>{H.model_key(p.model)} {H.esc(p.model)} '
             f'<small>{H.esc(meta)}</small></h3>'
             f'<figure class="chart"><div class="chart-body"></div><figcaption>Forecast along the {H.esc(p.model)} '
             f'optimal route ({H.esc(os.path.basename(r.path))}).{H.esc(note)} The bar under the charts is the planned sail.'
@@ -248,13 +214,13 @@ def render(b: Briefing) -> str:
                 row += ["–", "–", "–"]
                 continue
             k = int(np.argmin(np.abs(r.t - h)))
-            row += [_num(r.get("tws")[k], 0), H.esc(f"{_num(r.get('twd')[k], 0)} {compass(r.get('twd')[k])}"), _num(r.get("mslp")[k])]
+            row += [H.num(r.get("tws")[k], 0), H.esc(f"{H.num(r.get('twd')[k], 0)} {compass(r.get('twd')[k])}"), H.num(r.get("mslp")[k])]
         cmp_rows.append(row)
     cmp_head = ["Time"] + [x for m in models for x in (f"{m} kt", f"{m} dir", f"{m} hPa")]
-    cmp_table = _table(cmp_head, cmp_rows, num_cols=set(range(len(cmp_head))) - {0})
+    cmp_table = H.table(cmp_head, cmp_rows, num_cols=set(range(len(cmp_head))) - {0})
 
     # --- sails and manoeuvres
-    plan_rows = [[_model_cell(p.model),
+    plan_rows = [[H.model_cell(p.model),
                   H.esc(" → ".join(f"{s['sail']} ({f.hm(s['t0'])})" for s in p.sail_runs))] for p in b.plans]
     man_rows = sorted(([H.esc(f.when(m["t"])), H.esc(p.model), H.esc(m["kind"]),
                         H.esc(f"{abs(m['twa_from']):.0f}° {'stbd' if m['twa_from'] > 0 else 'port'} → "
@@ -263,9 +229,9 @@ def render(b: Briefing) -> str:
     shift_rows = [[H.esc(p.model), H.esc(f"{f.hm(s['t0'])}–{f.hm(s['t1'])}"),
                    H.esc(f"{s['kind']} {abs(s['shift']):.0f}°"), H.esc(f"{compass(s['from'])} → {compass(s['to'])}")]
                   for p in b.plans for s in p.shifts]
-    sails_tables = (_table(["Model", "Planned sails (from the routing's sail chart)"], plan_rows)
-                    + _table(["Time", "Model", "Manoeuvre", "TWA", "At mark"], man_rows, num_cols={0})
-                    + (_table(["Model", "Hour", "Shift", "Direction"], shift_rows) if shift_rows else ""))
+    sails_tables = (H.table(["Model", "Planned sails (from the routing's sail chart)"], plan_rows)
+                    + H.table(["Time", "Model", "Manoeuvre", "TWA", "At mark"], man_rows, num_cols={0})
+                    + (H.table(["Model", "Hour", "Shift", "Direction"], shift_rows) if shift_rows else ""))
 
     # --- marks (map table view)
     mark_names, seen = [], set()
@@ -282,13 +248,13 @@ def render(b: Briefing) -> str:
             t = next((m["t"] for m in p.marks if m["name"] == name and m["occurrence"] == occ), None)
             row.append(H.esc(f.when(t)))
         mark_rows.append(row)
-    marks_table = _table(["Mark"] + models, mark_rows, num_cols=set(range(1, len(models) + 1)))
+    marks_table = H.table(["Mark"] + models, mark_rows, num_cols=set(range(1, len(models) + 1)))
 
     # --- finishes
     used = {(os.path.basename(p.route.path)) for p in b.plans}
     fin_rows = [[H.esc(f.run(r["run"])), H.esc(r["model"]), H.esc(r["source"]), H.esc(f.when(r["finish"])),
                  H.esc(timeutil.fmt_duration(r["elapsed"]))] for r in b.finishes]
-    fin_table = _table(["Run", "Model", "From", "Finish", "Elapsed"], fin_rows, num_cols={3, 4}, stack=True,
+    fin_table = H.table(["Run", "Model", "From", "Finish", "Elapsed"], fin_rows, num_cols={3, 4}, stack=True,
                        row_class=lambda k: "used" if b.finishes[k]["source"] == "route table" and b.finishes[k]["file"] in used else "")
 
     notes = f'<section id="notes" class="wrap"><h2>Navigator\'s notes</h2><div class="notes">{H.esc(b.notes)}</div></section>' if b.notes else ""
@@ -327,7 +293,7 @@ def render(b: Briefing) -> str:
   <p class="lede">Each row is one model. ◆ is when its routing meets the change (the largest wind shift that holds for
   half an hour); ● is when it reaches {H.esc(turning)}. If ● comes before ◆, that model has us rounding before the change.
   The grey band spans the earliest to the latest model.</p>
-  {_figure("chart-window", "Change and rounding time per model, on the race clock. The table below holds the same times.")}
+  {H.figure("chart-window", "Change and rounding time per model, on the race clock. The table below holds the same times.")}
   {change_table}
 </section>
 <section id="meteograms" class="wrap">
@@ -348,19 +314,19 @@ def render(b: Briefing) -> str:
   <h2>The models side by side</h2>
   <p class="lede">The same forecasts on one set of axes. Where the lines part, the models disagree: that is where to
   watch the breeze and the barometer.</p>
-  {_figure("chart-compare", "Wind speed, direction and pressure along each model's route.", cmp_table, "Table view (on the hour)")}
+  {H.figure("chart-compare", "Wind speed, direction and pressure along each model's route.", cmp_table, "Table view (on the hour)")}
 </section>
 <section id="sails" class="wrap">
   <h2>Sails, tacks and gybes</h2>
   <p class="lede">The sail each routing picks from the sail chart, and where it tacks or gybes. Use it to have the next
   sail ready on deck before the breeze gets there. Very short changes at mark roundings are left out.</p>
-  {_figure("chart-sails", "Planned sails per model; ◆ marks a tack or gybe.", sails_tables, "Table view")}
+  {H.figure("chart-sails", "Planned sails per model; ◆ marks a tack or gybe.", sails_tables, "Table view")}
 </section>
 <section id="routes" class="wrap">
   <h2>Routes on the course</h2>
   <p class="lede">Markers sit on the hour along each route; ◆ shows where each route meets the change. Drag to pan (two
   fingers on a phone); click the map, then scroll to zoom.</p>
-  {_figure("chart-map", "Optimal routes and course marks. Coast: Natural Earth · © OpenStreetMap contributors.", marks_table, "Table view (route time at each mark)")}
+  {H.figure("chart-map", "Optimal routes and course marks. Coast: Natural Earth · © OpenStreetMap contributors.", marks_table, "Table view (route time at each mark)")}
 </section>
 <section id="finishes" class="wrap">
   <h2>Predicted finish</h2>

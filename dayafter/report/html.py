@@ -94,3 +94,39 @@ def page(title: str, body: str, data: dict, scripts: tuple[str, ...], descriptio
         f"<title>{esc(title)}</title>\n{_THEME_BOOT}\n<style>\n{css}\n</style>\n</head>\n<body>\n"
         f"{body}\n{json_script(data)}\n<script>\n{js}\n</script>\n</body>\n</html>\n"
     )
+
+
+# ---------------------------------------------------------------------------------------------- page parts
+
+def table(headers: list[str], rows: list[list[str]], num_cols: set[int] = frozenset(), row_class=None,
+           stack: bool = False) -> str:
+    """An HTML table. `stack=True` turns rows into label/value cards on phones (data-label per cell)."""
+    th = "".join(f'<th class="num">{esc(h)}</th>' if i in num_cols else f"<th>{esc(h)}</th>" for i, h in enumerate(headers))
+    body = []
+    for k, r in enumerate(rows):
+        cls = f' class="{row_class(k)}"' if row_class and row_class(k) else ""
+        tds = "".join((f'<td class="num" data-label="{esc(headers[i])}">{c}</td>' if i in num_cols
+                       else f'<td data-label="{esc(headers[i])}">{c}</td>') for i, c in enumerate(r))
+        body.append(f"<tr{cls}>{tds}</tr>")
+    tcls = ' class="stack"' if stack else ""
+    return f'<div class="table-wrap"><table{tcls}><thead><tr>{th}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
+
+
+def figure(fid: str, caption: str, table_html: str = "", table_label: str = "Table view") -> str:
+    tv = f'<details class="table-view"><summary>{esc(table_label)}</summary>{table_html}</details>' if table_html else ""
+    return (f'<figure class="chart" id="{fid}"><div class="legend"></div><div class="chart-body"></div>'
+            f'<figcaption>{caption}</figcaption>{tv}</figure>')
+
+
+def num(v, dp=1) -> str:
+    return "–" if v is None or not np.isfinite(v) else f"{v:.{dp}f}"
+
+
+def model_key(model: str) -> str:
+    var = {"GFS": "--m-gfs", "ECMWF": "--m-ecmwf", "ACCESS": "--m-access"}.get(model, "--m-other")
+    return f'<span class="swatch-line" style="border-top-color: var({var})"></span>'
+
+
+def model_cell(model: str) -> str:
+    """Colour key and model name that stay on one line, also in the phone card layout."""
+    return f'<span class="nowrap">{model_key(model)} {esc(model)}</span>'

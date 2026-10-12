@@ -1,6 +1,7 @@
 # private race data: never commit
 data/
 *.dayafter.json
+!fixtures/**/race.dayafter.json
 season*.sqlite
 # python / build
 .venv/

@@ -50,6 +50,27 @@ def cmd_before(args) -> int:
     return 0
 
 
+def cmd_build(args) -> int:
+    import json
+    from .analysis.race_analysis import analyse
+    from .report import navigator
+
+    project = None
+    if args.race_file:
+        with open(args.race_file, encoding="utf-8") as f:
+            project = json.load(f)
+    a = analyse(args.folder, args.extra or [], project, log=lambda m: print(f"  {m}"))
+    out = navigator.write(a, args.out)
+    print(f"Day After for {a.race_name}: {a.boat}, {a.result.place if a.result and a.result.place else '?'}"
+          f" of {sum(r.finished for r in a.results) or '?'}")
+    for w in a.warnings:
+        print(f"  warning: {w}")
+    print(f"  wrote {out}")
+    if args.open:
+        open_in_browser(out)
+    return 0
+
+
 def cmd_fetch_yb(args) -> int:
     from .ingest import yb
 
@@ -79,6 +100,7 @@ def cmd_selftest(args) -> int:
 def cmd_serve(args) -> int:
     print("The browser app arrives with milestone M5. Until then:\n"
           "  dayafter before <race folder> [--open]     crew weather briefing from Expedition route tables\n"
+          "  dayafter build <race folder> [--open]      the Day After report (navigator edition)\n"
           "  dayafter fetch-yb <race key> <folder>      save the YB fleet tracks (do it on race day)\n"
           "  dayafter fetch-bom <wmo ...> --out <folder> save BOM coastal observations (within 72 h)\n"
           "  dayafter selftest                         check the build against the Flinders 2026 numbers")
@@ -97,6 +119,14 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--out", help="output HTML file (default: <folder>/out/day_before_<race>.html)")
     b.add_argument("--open", action="store_true", help="open the briefing in the browser")
     b.set_defaults(func=cmd_before)
+
+    d = sub.add_parser("build", help="build the Day After report from a race folder (navigator edition)")
+    d.add_argument("folder", help="race folder: Expedition log, course, route tables, results, events (searched recursively)")
+    d.add_argument("--extra", action="append", help="another folder with inputs for this race (repeatable)")
+    d.add_argument("--race-file", help="race.dayafter.json to use instead of the one in the folder")
+    d.add_argument("--out", help="output HTML file (default: <folder>/out/day_after_<race>_navigator.html)")
+    d.add_argument("--open", action="store_true", help="open the report in the browser")
+    d.set_defaults(func=cmd_build)
 
     y = sub.add_parser("fetch-yb", help="download YB fleet tracks and race setup for a race key")
     y.add_argument("key", help="YB race key, the last part of the tracker link (e.g. bwps2026_2)")

@@ -335,6 +335,10 @@ const DA = (() => {
       return;
     }
     if (s.kind === "dots") {
+      if (s.dense) {  // many points: small solid dots, no surface ring (the rings would swallow each other)
+        for (let i = 0; i < t.length; i++) if (fin(v[i])) paint(el("circle", { cx: x(t[i]), cy: y(v[i]), r: 1.8 }, g), null, s.color);
+        return;
+      }
       for (let i = 0; i < t.length; i++) if (fin(v[i])) marker(g, s.marker || "circle", x(t[i]), y(v[i]), 4, s.color);
       return;
     }
@@ -481,25 +485,39 @@ const DA = (() => {
         paint(el("path", { d: ringPath(ring) + "Z" }, gBase), "var(--coast)", "var(--land)", { strokeWidth: "1px" });
       }
       for (const r of spec.routes) {
-        const pts = r.lat.map((la, i) => S(la, r.lon[i]));
-        paint(el("path", { d: "M" + pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join("L") }, gBase), r.color, null,
-          { strokeWidth: "2px", strokeDasharray: r.dash || "none", strokeLinejoin: "round" });
-        pts.forEach((p, i) => hover.push({ x: p[0], y: p[1], route: r, i }));
+        let d = "", pen = false;
+        for (let i = 0; i < r.lat.length; i++) {  // a missing fix (GPS dropout) breaks the line
+          if (!fin(r.lat[i]) || !fin(r.lon[i])) { pen = false; continue; }
+          const p = S(r.lat[i], r.lon[i]);
+          d += (pen ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1);
+          pen = true;
+          hover.push({ x: p[0], y: p[1], route: r, i });
+        }
+        paint(el("path", { d }, gBase), r.color, null,
+          { strokeWidth: (r.width || 2) + "px", strokeDasharray: r.dash || "none", strokeLinejoin: "round", strokeOpacity: r.opacity || 1 });
+        if (r.hourly === false) continue;
         for (let t = Math.ceil(r.t[0] / 3600) * 3600; t <= r.t[r.t.length - 1]; t += 3600) {  // a marker every full hour
           const q = along(r.t, r.lat, r.lon, t);
-          if (q) { const p = S(q[0], q[1]); marker(gOver, r.marker, p[0], p[1], 4, r.color); }
+          if (q && fin(q[0]) && fin(q[1])) { const p = S(q[0], q[1]); marker(gOver, r.marker, p[0], p[1], 4, r.color); }
         }
       }
+      const labelled = [];  // label boxes already placed; a label that would overlap one is left out
+      const place = (px, py, s, attrs) => {
+        const w = s.length * 6.4, box = [px, py - 11, px + w, py + 3];
+        if (labelled.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) return;
+        labelled.push(box);
+        text(gOver, px, py, s, attrs);
+      };
       for (const mk of spec.marks || []) {
         const [px, py] = S(mk.lat, mk.lon);
         const strong = mk.role === "turning_mark" || mk.role === "start" || mk.role === "finish";
         paint(el("path", { d: `M${px - 4},${py - 4}L${px + 4},${py + 4}M${px - 4},${py + 4}L${px + 4},${py - 4}` }, gOver), "var(--ink)", null, { strokeWidth: strong ? "2px" : "1.5px" });
-        if (strong || view.s > fit * 2.5) text(gOver, px + 7, py - 6, mk.name, { class: strong ? "t-strong" : "" });
+        if (strong || view.s > fit * 2.5) place(px + 7, py - 6, mk.name, { class: strong ? "t-strong" : "" });
       }
       for (const pt of spec.points || []) {
         const [px, py] = S(pt.lat, pt.lon);
         marker(gOver, pt.shape || "diamond", px, py, 6, pt.color);
-        if (pt.label) text(gOver, px + 9, py + 4, pt.label);
+        if (pt.label) place(px + 9, py + 4, pt.label, {});
       }
       const nmPerPx = 60 / view.s;  // one projected unit is one degree of latitude = 60 nm
       const nice = [0.5, 1, 2, 5, 10, 20, 50, 100].find((v) => v >= nmPerPx * 60) || 100;
@@ -516,7 +534,7 @@ const DA = (() => {
       if (cursorT === null) return;
       for (const r of spec.routes) {
         const q = along(r.t, r.lat, r.lon, cursorT);
-        if (q) { const p = S(q[0], q[1]); marker(gCursor, "circle", p[0], p[1], 6, r.color); }
+        if (q && fin(q[0]) && fin(q[1])) { const p = S(q[0], q[1]); marker(gCursor, "circle", p[0], p[1], 6, r.color); }
       }
     }
     render();
@@ -598,6 +616,75 @@ const DA = (() => {
     return id;
   }
 
+  // ------------------------------------------------------------------ x-y lines (e.g. minutes vs distance)
+  /* spec = {x0, x1, xTicks?:[{x, label}], xFmt?, yLabel, yFmt?, zero?, height?, series:[{name, x:[], y:[], color,
+     dash?, marker?}], vlines:[{x, label}], snap:[x...], tip:(k)=>({head, rows}), endLabels?, aria} */
+  function xyLines(root, spec) {
+    root.textContent = "";
+    const W = Math.max(300, root.clientWidth);
+    const H = spec.height || 300;
+    const m = { l: 50, r: spec.endLabels ? 96 : 14, t: (spec.vlines || []).some((v) => v.label) ? 26 : 12, b: 34 };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": spec.aria || "chart" }, root);
+    const x = linear(spec.x0, spec.x1, m.l, W - m.r);
+    const ext = extent(spec.series.map((s) => s.y)) || [0, 1];
+    const lo = spec.zero ? Math.min(0, ext[0]) : ext[0], hi = spec.zero ? Math.max(0, ext[1]) : ext[1];
+    const ticks = niceTicks(lo, hi, 5);
+    const y = linear(ticks[0], ticks[ticks.length - 1], H - m.b, m.t);
+    for (const v of ticks) {
+      paint(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg), v === 0 && spec.zero ? "var(--ink-2)" : "var(--grid)", null,
+        { strokeWidth: "1px" });
+      text(svg, m.l - 6, y(v) + 4, spec.yFmt ? spec.yFmt(v) : String(v), { "text-anchor": "end" });
+    }
+    if (spec.yLabel) text(svg, m.l, m.t - 10 > 8 ? 10 : m.t - 2, spec.yLabel, { class: "t-ink", "font-size": 12 });
+    const xt = spec.xTicks || niceTicks(spec.x0, spec.x1, 6).map((v) => ({ x: v, label: spec.xFmt ? spec.xFmt(v) : String(v) }));
+    let lastX = -Infinity;
+    for (const tk of xt) {
+      const px = x(tk.x);
+      if (px < m.l - 1 || px > W - m.r + 1) continue;
+      paint(el("line", { x1: px, x2: px, y1: H - m.b, y2: H - m.b + 4 }, svg), "var(--muted)", null, { strokeWidth: "1px" });
+      if (px - lastX > tk.label.length * 6.4 + 8) { text(svg, px, H - m.b + 16, tk.label, { "text-anchor": "middle" }); lastX = px; }
+    }
+    if (spec.xLabel) text(svg, (m.l + W - m.r) / 2, H - 4, spec.xLabel, { "text-anchor": "middle" });
+    for (const v of spec.vlines || []) {
+      const px = x(v.x);
+      paint(el("line", { x1: px, x2: px, y1: m.t - 4, y2: H - m.b }, svg), "var(--muted)", null, { strokeWidth: "1px" });
+      if (v.label) text(svg, px, m.t - 8, v.label, { "text-anchor": "middle", class: "t-strong" });
+    }
+    const used = [];
+    for (const s of spec.series) {
+      let d = "", pen = false;
+      for (let i = 0; i < s.x.length; i++) {
+        if (!fin(s.y[i])) { pen = false; continue; }
+        d += (pen ? "L" : "M") + x(s.x[i]).toFixed(1) + "," + y(s.y[i]).toFixed(1);
+        pen = true;
+      }
+      paint(el("path", { d }, svg), s.color, null, { strokeWidth: "2px", strokeDasharray: s.dash || "none", strokeLinejoin: "round" });
+      for (let i = 0; i < s.x.length; i++) if (fin(s.y[i])) marker(svg, s.marker || "circle", x(s.x[i]), y(s.y[i]), 4, s.color);
+      if (spec.endLabels) {
+        let k = s.y.length - 1;
+        while (k >= 0 && !fin(s.y[k])) k--;
+        if (k >= 0 && !used.some((u) => Math.abs(u - y(s.y[k])) < 13)) {
+          used.push(y(s.y[k]));
+          text(svg, x(s.x[k]) + 10, y(s.y[k]) + 4, `${s.name} ${spec.endFmt ? spec.endFmt(s.y[k]) : s.y[k]}`, { class: "t-ink" });
+        }
+      }
+    }
+    const hair = paint(el("line", { x1: 0, x2: 0, y1: m.t, y2: H - m.b }, svg), "var(--ink)", null, { strokeWidth: "1px", display: "none", pointerEvents: "none" });
+    const hit = paint(el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }, svg), null, "transparent");
+    const snap = spec.snap || [];
+    function onMove(ev) {
+      if (!snap.length) return;
+      const r = svg.getBoundingClientRect();
+      const k = nearestIndex(snap, x.invert((ev.clientX - r.left) * (W / r.width)));
+      hair.setAttribute("x1", x(snap[k])); hair.setAttribute("x2", x(snap[k])); hair.style.display = "";
+      if (spec.tip) { const c = spec.tip(k); showTip(ev.clientX, ev.clientY, c.head, c.rows); }
+    }
+    hit.addEventListener("pointermove", onMove);
+    hit.addEventListener("pointerdown", onMove);
+    hit.addEventListener("pointerleave", () => { hair.style.display = "none"; hideTip(); });
+    return null;
+  }
+
   // ------------------------------------------------------------------ legend (HTML)
   function legend(host, items) {
     host.textContent = "";
@@ -619,5 +706,39 @@ const DA = (() => {
     }
   }
 
-  return { setZone, hm, dayLabel, mount, timePanels, timeRows, map, legend, emit, fin };
+  // ------------------------------------------------------------------ wind-direction axis
+  /* A 360° axis centred on the prevailing direction (vector mean, rounded to 90°), so a northerly does not flip
+     between the top and the bottom of the panel. Returns {domain, ticks, fmt, wrap}; wrap() maps values onto it. */
+  function dirAxis(...lists) {
+    let sx = 0, sy = 0;
+    for (const list of lists) for (const v of list || []) if (fin(v)) { sx += Math.sin(v * Math.PI / 180); sy += Math.cos(v * Math.PI / 180); }
+    const mean = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+    const c = (sx === 0 && sy === 0) ? 180 : (Math.round(mean / 90) * 90) % 360;
+    const lo = c - 180;
+    const names = { 0: "N", 90: "E", 180: "S", 270: "W" };
+    return {
+      domain: [lo, lo + 360], ticks: [lo, lo + 90, lo + 180, lo + 270, lo + 360],
+      fmt: (v) => names[((v % 360) + 360) % 360],
+      wrap: (v) => (fin(v) ? c + ((((v - c) % 360) + 540) % 360) - 180 : v),
+    };
+  }
+
+  // ------------------------------------------------------------------ theme button: auto -> light -> dark
+  function themeButton(btn) {
+    if (!btn) return;
+    const get = () => { try { return localStorage.getItem("da-theme"); } catch (e) { return null; } };
+    const set = (v) => { try { if (v) localStorage.setItem("da-theme", v); else localStorage.removeItem("da-theme"); } catch (e) { /* private mode */ } };
+    const apply = (v) => {
+      if (v) document.documentElement.setAttribute("data-theme", v); else document.documentElement.removeAttribute("data-theme");
+      btn.textContent = v === "dark" ? "Theme: dark" : v === "light" ? "Theme: light" : "Theme: auto";
+    };
+    apply(get());
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-theme");
+      const next = cur === null ? "light" : cur === "light" ? "dark" : null;
+      set(next); apply(next);
+    });
+  }
+
+  return { setZone, hm, dayLabel, mount, timePanels, timeRows, xyLines, map, legend, emit, fin, nearest: nearestIndex, themeButton, dirAxis };
 })();
