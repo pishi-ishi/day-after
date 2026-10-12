@@ -47,10 +47,9 @@ NEEDS = {
 
 def _protected(path: str) -> bool:
     """True inside Expedition's own data folder (C:\\ProgramData\\Expedition, or /mnt/c/... on WSL2)."""
-    p = path.replace("\\", "/").lower()
-    if not (len(p) > 2 and p[1] == ":" and p[2] == "/"):
-        p = os.path.abspath(path).replace("\\", "/").lower()
-    return any(p.startswith(x.replace("\\", "/")) for x in PROTECTED)
+    forms = {path.replace("\\", "/").lower(), os.path.abspath(path).replace("\\", "/").lower()}
+    prefixes = [x.replace("\\", "/") for x in PROTECTED]
+    return any(f.startswith(x) or f[2:].startswith(x) and f[1] == ":" for f in forms for x in prefixes)
 
 
 def _roots() -> list[dict]:
