@@ -55,7 +55,8 @@ The app icon follows the 7seas-telemetrics icon (two masts, two sails, hull base
 | Rival 1 | `#e87ba4` magenta | `#d55181` | direct label |
 | Rival 2 | `#008300` green | `#008300` | direct label |
 | Rival 3 | `#eda100` yellow | `#c98500` | direct label |
-| Other model / 4th rival | `#e34948` red | `#e66767` | direct label |
+| 4th rival | `#e34948` red | `#e66767` | direct label |
+| Any other model (ICON, AIGFS, AIFS …) | `#898781` neutral grey | `#9a9890` | its own dash, diamond markers and a direct label (red failed all-pairs against GFS orange: ΔE 7.1) |
 | Everyone else (fleet context) | muted ink at 35 % | | no label |
 
 **Status** (never reused for series; always with icon + label): good `#0ca30c`, warning `#fab219`, serious `#ec835a`, critical `#d03b3b`.

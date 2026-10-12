@@ -177,7 +177,7 @@ const DA = (() => {
 
   // ------------------------------------------------------------------ stacked time panels (meteogram)
   /* spec = {t0, t1, panels:[{label, height, domain?, minSpan?, ticks?, fmt?, series:[{name, t, y, y2?, kind:
-     'line'|'dots'|'bars'|'band', color, dash?, width?}]}], vlines:[{t, label, strong?}], bands:[{t0, t1, label}],
+     'line'|'dots'|'bars'|'band', color, dash?, width?}]}], vlines:[{t, label, strong?, dash?}], bands:[{t0, t1, label}],
      strip:{segments:[{t0, t1, text, kind}]}, snap:[t...], tip:(t)=>({head, rows}), aria} */
   function timePanels(root, spec) {
     root.textContent = "";
@@ -252,9 +252,10 @@ const DA = (() => {
     for (const v of spec.vlines || []) {
       const px = x(v.t);
       if (px < m.l - 0.5 || px > W - m.r + 0.5) continue;
-      paint(el("line", { x1: px, x2: px, y1: plotTop - 4, y2: plotBottom }, svg), v.strong ? "var(--ink)" : "var(--muted)", null,
-        { strokeWidth: v.strong ? "1.5px" : "1px", strokeOpacity: v.strong ? 1 : 0.3 });
-      if (v.label) labels.push({ px, text: v.label, strong: !!v.strong, rank: v.strong ? 0 : 2 });
+      const vl = paint(el("line", { x1: px, x2: px, y1: plotTop - 4, y2: plotBottom }, svg), v.strong || v.dash ? "var(--ink)" : "var(--muted)", null,
+        { strokeWidth: v.strong || v.dash ? "1.5px" : "1px", strokeOpacity: v.strong || v.dash ? 1 : 0.3 });
+      if (v.dash) vl.setAttribute("stroke-dasharray", "5 4");
+      if (v.label) labels.push({ px, text: v.label, strong: !!(v.strong || v.dash), rank: v.strong ? 0 : v.dash ? 1 : 2 });
     }
     const placed = [[], []];  // two label rows; the turning-mark label goes first, then bands, then the rest
     for (const lb of labels.sort((a, b) => a.rank - b.rank)) {
@@ -774,6 +775,22 @@ const DA = (() => {
     };
   }
 
+  // ------------------------------------------------------------------ model styles (BRAND §2)
+  // GFS, ECMWF and ACCESS own a colour each (validated all-pairs); any other model is neutral grey and is told
+  // apart by its dash, marker and a direct label.
+  const MODEL = {
+    GFS: { color: "var(--m-gfs)", dash: "6 3", marker: "circle" },
+    ECMWF: { color: "var(--m-ecmwf)", dash: "2 2", marker: "square" },
+    ACCESS: { color: "var(--m-access)", dash: "8 3 2 3", marker: "triangle" },
+  };
+  const OTHER_DASH = ["4 2", "1 3", "10 3", "3 3 1 3"];
+  const otherIx = new Map();
+  function modelStyle(m) {
+    if (MODEL[m]) return MODEL[m];
+    if (!otherIx.has(m)) otherIx.set(m, otherIx.size);
+    return { color: "var(--m-other)", dash: OTHER_DASH[otherIx.get(m) % OTHER_DASH.length], marker: "diamond" };
+  }
+
   // ------------------------------------------------------------------ theme button: auto -> light -> dark
   function themeButton(btn) {
     if (!btn) return;
@@ -791,5 +808,5 @@ const DA = (() => {
     });
   }
 
-  return { setZone, hm, dayLabel, mount, timePanels, timeRows, xyLines, scatter, map, legend, emit, fin, nearest: nearestIndex, themeButton, dirAxis };
+  return { setZone, hm, dayLabel, mount, timePanels, timeRows, xyLines, scatter, map, legend, emit, fin, nearest: nearestIndex, themeButton, dirAxis, modelStyle };
 })();

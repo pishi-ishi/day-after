@@ -111,6 +111,13 @@ The hole (10:30–10:57) must be found by the hole detector (SOG < 3 kt ≥ 10 m
 - Route tables alone (no GRIB) must produce: meteograms along each route (TWS, gust `Twg`, MSLP, AirT, Rain), sail-plan strips (`Sail` column: J1 → A1/2 → … → Poled J4 → J4), change times per model, and a change window covering the observed ~17:05 change.
 - With GRIBs (after T1): observed-vs-forecast at our position shows every model **30–60 % light** on the leg-1 NNE (observed 21–25 kt 13:00–14:10 vs forecast 8–17 kt) and on the southerly (30–36 kt, 10-min mean, vs 20–30 kt).
 
+> **Build notes (12 Oct 2026).** Day After reads every GRIB model at our own position (bilinear in space, linear in time, 10-min steps) and judges each on the forecast we had at the gun: the latest run among the files Expedition downloaded before 10:00 (the 08:34 download: ECMWF and AIFS 12Z, GFS, ICON and AIGFS 18Z on Fri 25 Sep). The decoder matches eccodes to 1e-9 on every field of every Flinders file. What the GRIBs show:
+> - **Leg-1 NNE (13:00–14:10, observed 21–25 kt):** ECMWF 9–14 kt (**50 % light**), GFS 6–16 kt (**54 % light**). ICON, AIGFS and AIFS were 75–80 % light (4–7 kt).
+> - **The southerly (18:00–20:30, observed 27–36 kt in 10-min means):** ECMWF 15–29 kt (21 % light), GFS 17–25 kt (28 %), ICON 14–28 kt (25 %), AIGFS 12–21 kt (45 %), AIFS 4–14 kt (72 %). So the southerly was 20–30 % light in the three main models, not 30–60 %; the 20–30 kt forecast range holds.
+> - **Change timing at our position:** every model brought the change early: ECMWF 16:30 (35 min), ICON 16:20, AIFS 16:10, GFS 14:50 (2 h 15 min); AIGFS shows no change. Along their own routes (route tables) ECMWF was 14 min late and ACCESS 34 min late.
+> - ACCESS and UM GRIBs are encrypted by Expedition (`grbenc01`): the report says so and judges ACCESS from its route table only.
+> - The crew edition picks ACCESS, ECMWF and GFS (best verified along their routes, in that order) and its key moments are Cape Banks → Flinders Islet (19 kt measured; routings 10–15 kt, about 39 % light; GRIBs 4–9 kt), the change at 17:05 and the 30 kt southerly after it.
+
 ## M4: performance
 
 `expected/polar_by_phase.csv` (STW corrected by k = 1.257; polar `llama2_polars_2026.txt`, clamped at its 24 kt row). Tolerance ±2 percentage points:

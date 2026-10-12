@@ -64,6 +64,14 @@ It writes `out/day_before_<race>.html` in that folder: one file that opens offli
 .venv/bin/dayafter fetch-bom 95768 94780 95752 94749 95745 95749 95940 94751 94938 95937 94939 --out "<race folder>/obs"
 ```
 
+**Day After.** With the log, results, YB tracks, route tables and (optionally) GRIBs, BOM files and `Expedition.db` in the race folder:
+
+```bash
+.venv/bin/dayafter build "<race folder>" --open
+```
+
+It writes one HTML file per edition into `out/`: the **navigator** edition (overview, phases, plan vs reality with the GRIB model scorecard, fleet, calibration) and the **crew** edition (the briefing's meteograms for the three best-verified models with what we actually measured on top, and the race's key moments). `--editions navigator` limits the set.
+
 `dayafter selftest` checks a build against the Flinders Islet 2026 numbers in [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md).
 
 ## Documentation

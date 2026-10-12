@@ -9,6 +9,7 @@ import numpy as np
 
 from .. import __version__
 from ..analysis import race as race_mod
+from ..analysis import forecast as forecast_mod
 from ..analysis.findings import Finding, findings, mark_display, mark_labeller
 from ..analysis.race_analysis import RaceAnalysis
 from ..analysis.weather import compass
@@ -109,6 +110,7 @@ def build_data(a: RaceAnalysis) -> dict:
                       for f in a.forecasts],
         "land": land, "coast": coast, "islands": islands,
         "fleet": fleet_data(a),
+        "grib": grib_data(a),
     }, 5)
 
 
@@ -136,6 +138,72 @@ def fleet_data(a: RaceAnalysis) -> dict | None:
     return {"gates": f.gates, "labels": f.gate_labels, "turning": f.turning_nm, "course": f.course_nm, "us": f.us.name,
             "ranks": [int(x) for x in f.ranks[f.us.name]], "rivals": rivals, "scatter": pts, "r": f.rounding_r,
             "n": len(f.boats)}
+
+
+def grib_data(a: RaceAnalysis) -> dict | None:
+    fa = a.forecast
+    if fa is None or not fa.models:
+        return None
+    return {"models": [{"model": m.model, "t": m.t, "tws": H.clean(m.tws, 1), "twd": H.clean(m.twd, 0),
+                        "gust": H.clean(m.gust, 1), "change": m.change_t} for m in forecast_mod.headline_models(fa)],
+            "obs": {"t": fa.obs_t, "tws": H.clean(fa.obs_tws, 1), "twd": H.clean(fa.obs_twd, 0)},
+            "stations": [{"name": st.name, "t": st.t, "tws": H.clean(st.wind_kt, 0)} for st in fa.stations[:2]]}
+
+
+def light_text(ratio: float | None) -> str:
+    if ratio is None or not np.isfinite(ratio):
+        return "–"
+    return f"{(1 - ratio) * 100:.0f} % light" if ratio < 1 else f"{(ratio - 1) * 100:.0f} % heavy"
+
+
+def _grib_section(a: RaceAnalysis) -> str:
+    fa = a.forecast
+    if fa is None:
+        return ('<h3 class="sub-h">Forecast at our position</h3><p class="lede">No GRIB files in the race folder. Copy the '
+                'race-morning GRIBs from Expedition\'s grib folder to judge every model where we actually sailed.</p>')
+    tz = a.tz
+    when = lambda t: timeutil.fmt_local(t, tz, "%a %H:%M") if t else "–"
+    notes = "".join(f"<li>{H.esc(n)}</li>" for n in fa.notes)
+    if not fa.models:
+        return (f'<h3 class="sub-h">Forecast at our position</h3><p class="lede">No GRIB model covers our track during '
+                f'the race.</p><ul class="warnings">{notes}</ul>')
+    rows = []
+    for m in sorted(fa.models, key=lambda m: m.scores.get("score", 99)):
+        s = m.scores
+        ce = s.get("change_error_s")
+        rows.append([H.model_cell(m.model), H.esc(timeutil.fmt_local(m.run, "UTC", "%a %H") + "Z"), H.esc(when(m.downloaded)),
+                     H.esc(f"{s['tws_bias']:+.1f}") if "tws_bias" in s else "–", H.num(s.get("tws_mae"), 1),
+                     H.esc(light_text(s.get("tws_ratio"))), H.num(s.get("twd_mae"), 0),
+                     H.esc(f"{_dur(ce)} {'late' if ce > 0 else 'early'}") if ce is not None else "no change",
+                     H.esc(os.path.basename(m.path))])
+    score = H.table(["Model", "Run", "Downloaded", "TWS bias kt", "TWS error kt", "Strength", "TWD error °",
+                     "Change timing", "File"], rows, num_cols={3, 4, 6}, stack=True)
+    legs = [p for p in a.phases]
+    prow = []
+    for ph in legs:
+        w0 = next((w for m in fa.models for w in m.windows if w["name"] == ph.name), None)
+        if w0 is None:
+            continue
+        row = [H.esc(ph.name), H.esc(f"{w0['obs']:.0f} ({w0['obs_min']:.0f}–{w0['obs_max']:.0f})")]
+        for m in fa.models:
+            w = next((x for x in m.windows if x["name"] == ph.name), None)
+            row.append(H.esc(f"{w['fc']:.0f} · {light_text(w['ratio'])}") if w else "–")
+        prow.append(row)
+    phase_t = H.table(["Phase", "Measured kt"] + [f"{m.model} kt" for m in fa.models], prow,
+                      num_cols=set(range(1, len(fa.models) + 2)),
+                      row_class=lambda k: "hole" if legs[k].kind == "hole" else "")
+    shown = ", ".join(m.model for m in forecast_mod.headline_models(fa))
+    mh = (f" Forecast 10 m wind is scaled by {fa.masthead_factor:.2f} to masthead height." if fa.masthead_factor != 1
+          else " Forecast wind is the model's 10 m wind, unscaled (set boat.masthead_factor in the race file to scale it).")
+    return f"""
+  <h3 class="sub-h">Forecast at our position (GRIB)</h3>
+  <p class="lede">Each model's GRIB read where we actually were, every 10 minutes, against the wind we measured there
+  (over the ground, 10-min means). Per model this is the latest run we had downloaded before the gun.{H.esc(mh)}</p>
+  {H.figure("chart-grib", f"Forecast at our position against what we measured: {shown} (the table lists every model).")}
+  {score}
+  <h3 class="sub-h">By phase</h3>
+  {phase_t}
+  {"<ul class='warnings'>" + notes + "</ul>" if notes else ""}"""
 
 
 # ------------------------------------------------------------------------------------------- html
@@ -248,6 +316,9 @@ def render(a: RaceAnalysis) -> str:
         inputs.append(f"Events: Expedition.db ({len(a.events)} around the race)")
     if a.polar is not None:
         inputs.append(f"Polar: {a.polar.name}")
+    if a.forecast is not None and a.forecast.models:
+        inputs.append("GRIBs used: " + ", ".join(os.path.basename(m.path) for m in a.forecast.models)
+                      + f" (of {len(a.inputs.gribs) + len(a.inputs.gribs_encrypted)} on file)")
     methods = [
         f"Times are {zone}. The gun comes from the {a.gun_source}; the start is the first crossing of the pinged line "
         f"({hms(a.start)}); the finish is the {a.finish_source} ({hms(a.finish)}).",
@@ -259,7 +330,8 @@ def render(a: RaceAnalysis) -> str:
         "an hour that then holds for half an hour, found in 10-min means of the wind over the ground and timed at the "
         "start of the transition (the old breeze dying).",
         "Forecasts: each model's wind along its own optimal route, against our 10-min mean wind over the ground at the "
-        "same time. Δ = actual − route: positive means behind the route.",
+        "same time. Δ = actual − route: positive means behind the route. GRIB models are read at our own position "
+        "(bilinear in space, linear in time); the change in a forecast is found the same way as in our log.",
     ]
     warns = "".join(f"<li>{H.esc(x)}</li>" for x in a.warnings)
     toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
@@ -296,12 +368,13 @@ def render(a: RaceAnalysis) -> str:
   below it ahead.</p>
   {H.figure("chart-splits", "Minutes behind (+) or ahead (−) of each route, by distance along the course.")}
   {splits_table}
-  <h3 class="sub-h">Forecast against what we sailed in</h3>
+  <h3 class="sub-h">Forecast along each route</h3>
   {H.figure("chart-forecast", "Each model's wind along its own route against our measured wind (10-min means over the ground).")}
   {score_table}
   <p class="lede">TWS bias and error compare each route's forecast with our measured wind at the same time; “our elapsed
   vs route” uses the official elapsed time ({H.esc(timeutil.fmt_duration(a.elapsed))}), the mark table above the moment
   we passed the finish point.</p>
+  {_grib_section(a)}
   <h3 class="sub-h">Predicted finishes</h3>
   {fin_table}
 </section>
@@ -386,9 +459,13 @@ def _ordinal_suffix(n: int) -> str:
     return "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
 
+def filename(a: RaceAnalysis) -> str:
+    return f"day_after_{_slug(a.race_name)}_navigator.html"
+
+
 def write(a: RaceAnalysis, out: str | None = None) -> str:
     if out is None:
-        out = os.path.join(a.folder, "out", f"day_after_{_slug(a.race_name)}_navigator.html")
+        out = os.path.join(a.folder, "out", filename(a))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     text = render(a)
     tmp = out + ".part"

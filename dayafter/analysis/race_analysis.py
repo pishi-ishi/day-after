@@ -16,7 +16,7 @@ from ..ingest.course import Course
 from ..ingest.expedition_log import Log, Timeline, read_logs
 from ..ingest.polar import Polar, read_polar
 from ..ingest.routes import RouteSummary, RouteTable, read_route_summary, read_route_table
-from . import calibration, fleet as fleet_mod, plan, race
+from . import calibration, fleet as fleet_mod, forecast as forecast_mod, plan, race
 from .briefing import _yb_title
 
 
@@ -57,6 +57,7 @@ class RaceAnalysis:
     events: list[events_mod.Event]
     polar: Polar | None
     fleet: fleet_mod.Fleet | None = None
+    forecast: forecast_mod.ForecastAtUs | None = None   # GRIB models at our position
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -222,6 +223,22 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
     except (OSError, ValueError, KeyError, IndexError) as e:
         warnings.append(f"polar not read: {e}")
 
+    fa = None
+    if inputs.gribs or inputs.gribs_encrypted or inputs.bom:
+        say("forecast at our position")
+        try:
+            fa = forecast_mod.forecast_at_us(inputs.gribs, tl, wind, start, finish, gun, change.onset if change else None,
+                                             ph, masthead_factor=float(boat_cfg.get("masthead_factor") or 1.0),
+                                             bom_files=inputs.bom, tz=tz, log=say)
+        except Exception as e:  # noqa: BLE001 - a GRIB problem must not cost the rest of the report
+            warnings.append(f"GRIB forecasts skipped: {e}")
+        if fa is not None and inputs.gribs_encrypted:
+            models = sorted({forecast_mod.model_from_filename(p)[0] for p in inputs.gribs_encrypted})
+            fa.notes.append(f"{len(inputs.gribs_encrypted)} GRIB file(s) ({', '.join(models)}) are encrypted by "
+                            "Expedition and were skipped; those models are judged from their route tables only")
+        if fa is not None:
+            fa.notes = [n for n in fa.notes if "encrypted by Expedition and cannot be read" not in n]
+
     say("fleet")
     fl = None
     try:
@@ -239,7 +256,7 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
         passages=passages, log=lg, tl=tl, wind=wind, checks=checks, fit=fit, k=k, holes=hole_list, change=change,
         phases=ph, routes=routes, all_routes=all_routes, summaries=summaries, splits=spl, forecasts=fcs,
         model_rank=plan.rank_models(fcs), events=events_mod.in_window(evs, gun - 3600, finish + 3600), polar=polar,
-        fleet=fl, warnings=warnings)
+        fleet=fl, forecast=fa, warnings=warnings)
 
 
 def load_fleet(inputs: detect.Inputs, proj: dict, course: Course, gun: float, results, boat_name: str,

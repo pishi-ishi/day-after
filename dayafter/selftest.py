@@ -305,6 +305,86 @@ def check_fleet_gates() -> str:
     return f"{n} gate gaps within {worst:.2f} min (80 nm included); ranks 21 … 16 at the islet … 15; r = {f.rounding_r:.3f}"
 
 
+# --------------------------------------------------------------------------------------------- M3: forecast, crew
+
+def check_grib_vectors() -> str:
+    import json
+    import numpy as np
+    from .ingest import grib
+    d = _need(_root("fixtures", "grib"))
+    with open(os.path.join(d, "expected.json"), encoding="utf-8") as f:
+        exp = json.load(f)["files"]
+    n = 0
+    for name, fields in exp.items():
+        got = grib.read_grib(os.path.join(d, name), raw=True)
+        assert len(got) == len(fields), name
+        for g, e in zip(got, fields):
+            assert g.param == e["param"] and list(g.shape) == e["shape"] and g.valid == e["valid"], name
+            assert int(np.isnan(g.values).sum()) == e["missing"], name
+            for j, i, x in e["samples"]:
+                assert abs(g.values[j, i] - x) <= 1e-9 * max(1.0, abs(e["max"])), (name, j, i)
+            n += 1
+    return f"{n} fields in {len(exp)} public vectors match eccodes (packing 5.2/5.3, grids 3.0/3.40, products 4.0/4.8)"
+
+
+def _window(a, m, h0: str, h1: str):
+    from .analysis import forecast
+    return forecast._window_stats(m.t, m.tws, a.forecast.obs_tws, _clock(a, h0), _clock(a, h1))
+
+
+def check_forecast_at_us() -> str:
+    a = _analysis()
+    fa = a.forecast
+    if fa is None or not fa.models:
+        raise Skip("no GRIBs in data/flinders_2026/gribs")
+    by = {m.model: m for m in fa.models}
+    assert {"ECMWF", "GFS", "ICON"} <= set(by), sorted(by)
+    out = []
+    for m in fa.models:  # leg-1 NNE: observed 21-25 kt, every model light
+        w = _window(a, m, "13:00", "14:10")
+        assert 20.5 <= w["obs_min"] and w["obs_max"] <= 26, w
+        light = 1 - w["ratio"]
+        assert light >= 0.3, (m.model, light)
+        if m.model in ("ECMWF", "GFS"):
+            assert light <= 0.6 and w["fc_max"] <= 17, (m.model, w)
+            out.append(f"{m.model} {light * 100:.0f} %")
+    for m in fa.models:  # the southerly: observed 27-36 kt (10-min means), every model at least 20 % light
+        w = _window(a, m, "18:00", "20:30")
+        assert w["obs_max"] >= 34 and 1 - w["ratio"] >= 0.2, (m.model, w)
+        if m.model in ("ECMWF", "GFS", "ICON"):
+            assert w["fc_max"] <= 30, (m.model, w)
+    early = [m.model for m in fa.models if m.change_t is not None and m.change_t < a.change.onset]
+    assert {"ECMWF", "GFS", "ICON"} <= set(early), early
+    assert any("encrypted" in n for n in fa.notes), fa.notes
+    return (f"leg-1 NNE {', '.join(out)} light (forecast ≤ 17 kt vs 21–25); southerly ≥ 20 % light in every model; "
+            f"every model brought the change early; ACCESS/UM GRIBs reported as encrypted")
+
+
+def check_crew_edition() -> str:
+    from .analysis.crew import build_crew_briefing
+    from .report import day_before
+    a = _analysis()
+    b = build_crew_briefing(a)
+    assert [p.model for p in b.plans] == ["ACCESS", "ECMWF", "GFS"], [p.model for p in b.plans]
+    assert b.window and b.window["t0"] <= a.change.onset <= b.window["t1"] + 1800, b.window
+    titles = [m["title"] for m in b.after["moments"]]
+    assert titles[0] == "Cape Banks → Flinders Islet" and "The change" in titles, titles
+    html = day_before.render(b)
+    assert "Day After · crew edition" in html and "What actually happened" in html
+    assert "<script src" not in html
+    return f"models {', '.join(p.model for p in b.plans)} (best verified first); moments: {'; '.join(titles)}; {len(html) // 1024} KB"
+
+
+def check_day_before_gribs() -> str:
+    b = _briefing()
+    if not b.gribs:
+        raise Skip("no GRIBs in data/flinders_2026/gribs")
+    models = [m["model"] for m in b.gribs["models"]]
+    assert {"ECMWF", "GFS", "ICON", "AIGFS", "AIFS"} <= set(models), models
+    assert all(m["file"].endswith("_26Sep26_083458.grb") for m in b.gribs["models"]), "not the last download before the gun"
+    return f"GRIB models along the {b.gribs['route_model']} route: {', '.join(models)} (08:34 download, the last before the gun)"
+
+
 CHECKS = [
     ("time zones and durations", check_time_zones),
     ("YB decoder test vector", check_yb_vector),
@@ -322,6 +402,10 @@ CHECKS = [
     ("M1 navigator report", check_navigator_report),
     ("M2 fleet finish gaps and rivals", check_fleet_finish_gaps),
     ("M2 gates, ranks and rounding effect", check_fleet_gates),
+    ("M3 GRIB decoder vectors", check_grib_vectors),
+    ("M3 forecast at our position", check_forecast_at_us),
+    ("M3 crew edition", check_crew_edition),
+    ("M3 Day Before with GRIBs", check_day_before_gribs),
 ]
 
 

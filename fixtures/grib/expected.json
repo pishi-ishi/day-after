@@ -1,0 +1,241 @@
+{
+ "source": "eccodes on the same bytes; missing values counted, stats over the rest",
+ "files": {
+  "gfs_025_prmsl_t53.grb2": [
+   {
+    "param": "0.3.1",
+    "shape": [
+     18,
+     23
+    ],
+    "valid": 1790294400.0,
+    "lat_south": -36.5,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_ll",
+    "missing": 0,
+    "min": 102488.6,
+    "max": 103236.0,
+    "mean": 102877.36811594204,
+    "samples": [
+     [
+      0,
+      0,
+      102579.20000000001
+     ],
+     [
+      17,
+      22,
+      103236.0
+     ],
+     [
+      6,
+      0,
+      102788.6
+     ]
+    ]
+   }
+  ],
+  "gfs_025_wave_t52.grb2": [
+   {
+    "param": "10.0.5",
+    "shape": [
+     6,
+     7
+    ],
+    "valid": 1790553600.0,
+    "lat_south": -34.75,
+    "packing": "grid_complex",
+    "grid": "regular_ll",
+    "missing": 41,
+    "min": 1.1300000000000001,
+    "max": 1.1300000000000001,
+    "mean": 1.1300000000000001,
+    "samples": [
+     [
+      4,
+      6,
+      1.1300000000000001
+     ],
+     [
+      4,
+      6,
+      1.1300000000000001
+     ],
+     [
+      4,
+      6,
+      1.1300000000000001
+     ]
+    ]
+   }
+  ],
+  "gfs_011_wind_gaussian.grb2": [
+   {
+    "param": "0.2.2",
+    "shape": [
+     11,
+     17
+    ],
+    "valid": 1790337600.0,
+    "lat_south": -34.734784,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_gg",
+    "missing": 0,
+    "min": -4.4,
+    "max": 2.5,
+    "mean": -1.2561497326203208,
+    "samples": [
+     [
+      0,
+      0,
+      1.0
+     ],
+     [
+      10,
+      16,
+      -3.6
+     ],
+     [
+      3,
+      11,
+      -1.5
+     ]
+    ]
+   },
+   {
+    "param": "0.2.3",
+    "shape": [
+     11,
+     17
+    ],
+    "valid": 1790337600.0,
+    "lat_south": -34.734784,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_gg",
+    "missing": 0,
+    "min": -13.100000000000001,
+    "max": 1.0,
+    "mean": -6.846524064171124,
+    "samples": [
+     [
+      0,
+      0,
+      -1.8
+     ],
+     [
+      10,
+      16,
+      -13.100000000000001
+     ],
+     [
+      3,
+      11,
+      -10.700000000000001
+     ]
+    ]
+   }
+  ],
+  "gfs_011_prate_gaussian_pdt8.grb2": [
+   {
+    "param": "0.1.7",
+    "shape": [
+     11,
+     17
+    ],
+    "valid": 1790348400.0,
+    "lat_south": -34.734784,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_gg",
+    "missing": 0,
+    "min": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "samples": [
+     [
+      0,
+      0,
+      0.0
+     ],
+     [
+      10,
+      16,
+      0.0
+     ],
+     [
+      3,
+      11,
+      0.0
+     ]
+    ]
+   }
+  ],
+  "icon_gust_pdt8_minutes.grb2": [
+   {
+    "param": "0.2.22",
+    "shape": [
+     60,
+     76
+    ],
+    "valid": 1790348400.0,
+    "lat_south": -37.3,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_ll",
+    "missing": 0,
+    "min": 0.19927775859832764,
+    "max": 17.839902758598328,
+    "mean": 9.856192506405344,
+    "samples": [
+     [
+      0,
+      0,
+      6.964902758598328
+     ],
+     [
+      59,
+      75,
+      9.230527758598328
+     ],
+     [
+      20,
+      0,
+      3.5899027585983276
+     ]
+    ]
+   }
+  ],
+  "ecmwf_tp_pdt8.grb2": [
+   {
+    "param": "0.1.193",
+    "shape": [
+     43,
+     56
+    ],
+    "valid": 1790305200.0,
+    "lat_south": -36.5,
+    "packing": "grid_complex_spatial_differencing",
+    "grid": "regular_ll",
+    "missing": 0,
+    "min": 0.0,
+    "max": 0.000957489013671875,
+    "mean": 1.7239009819157496e-05,
+    "samples": [
+     [
+      0,
+      0,
+      3.814697265625e-06
+     ],
+     [
+      42,
+      55,
+      0.0
+     ],
+     [
+      14,
+      18,
+      0.0
+     ]
+    ]
+   }
+  ]
+ }
+}

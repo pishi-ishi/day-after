@@ -223,7 +223,7 @@ Location: `C:\ProgramData\Expedition\grib\`. File names: `EX_<MODEL>_<res>_<ddMo
 |---|---|---|---|---|---|
 | `EX_ECMWF_025`, `EX_EC_AIFS_025` | GRIB2 | 98 | 3.0 regular lat/lon (0.1° or 0.25°) | **5.3** | PDT 4.0 and 4.8; MSL (0/3/0), U/V 10 m, gust (0/2/22), T2m, precip (0/1/193 ECMWF local, 0/1/52 AIFS), cloud (0/6/192 local, 0/6/1 AIFS), waves (discipline 10) |
 | `EX_GFS_025` | GRIB2 | 7 | 3.0 (0.25°) | **5.3**, some **5.2** | PRMSL (0/3/1), U/V 10 m, gust at surface, precip rate (0/1/7), cloud (0/6/1), T2m, CAPE, waves |
-| `EX_GFS_011` | GRIB2 | 7 | **3.40 Gaussian** | 5.3 | V 10 m and precip only; optional |
+| `EX_GFS_011` | GRIB2 | 7 | **3.40 Gaussian** | 5.3 | U/V 10 m and precip only; read as a regular grid between its first and last row (Gaussian rows are evenly spaced to 1e-10° here) |
 | `EX_ICON_01` | GRIB2 | 78 | 3.0 (0.1°) | 5.3 | Forecast time in **minutes** (unit 0); PRMSL, U/V 10 m, gust 10 m, precip (0/1/52), T2m |
 | `EX_AIGFS_025` | GRIB2 | 7 | 3.0 (0.25°) | 5.3 | MSL, U/V 10 m, T2m only (no gust) |
 | `EX_Mercator_0083` | GRIB2 | 512 | 3.0 (1/12°) | 5.3 | Ocean current u/v (10/1/2, 10/1/3) |

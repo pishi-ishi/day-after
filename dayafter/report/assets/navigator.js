@@ -6,12 +6,7 @@
   DA.setZone(D.tz);
   DA.themeButton(document.querySelector(".theme-btn"));
   const fin = DA.fin, hm = DA.hm;
-  const STYLE = {
-    GFS: { color: "var(--m-gfs)", dash: "6 3", marker: "circle" },
-    ECMWF: { color: "var(--m-ecmwf)", dash: "2 2", marker: "square" },
-    ACCESS: { color: "var(--m-access)", dash: "8 3 2 3", marker: "triangle" },
-  };
-  const style = (m) => STYLE[m] || { color: "var(--m-other)", dash: null, marker: "diamond" };
+  const style = DA.modelStyle;
   const BOAT = "var(--boat)";
   const COMPASS = "N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW".split(" ");
   const compass = (d) => (fin(d) ? COMPASS[Math.floor(((d % 360) + 11.25) / 22.5) % 16] : "–");
@@ -140,6 +135,40 @@
       },
     }));
   }
+  // ------------------------------------------------------------ GRIB models at our position vs what we measured
+  const gr = host("#chart-grib .chart-body");
+  if (gr && D.grib) {
+    const G = D.grib;
+    DA.legend(host("#chart-grib .legend"), [
+      { label: "measured (10-min mean, over the ground)", color: BOAT },
+      ...G.models.map((m) => ({ label: `${m.model} at our position`, color: style(m.model).color, dash: style(m.model).dash, marker: style(m.model).marker })),
+    ]);
+    const ax = DA.dirAxis(G.obs.twd, ...G.models.map((m) => m.twd));
+    const vl = [];
+    const turn = D.passages.find((p) => p.key && p.turning);
+    if (turn) vl.push({ t: turn.t, label: `${turn.label} ${hm(turn.t)}`, strong: true });
+    if (D.change) vl.push({ t: D.change.onset, label: `the change ${hm(D.change.onset)}`, strong: true });
+    DA.mount(gr, () => DA.timePanels(gr, {
+      t0: D.start - 300, t1: D.finish + 300, vlines: vl, endLabels: true, snap: G.obs.t,
+      aria: "Each GRIB model's wind at our position against the wind we measured",
+      panels: [
+        { label: "True wind speed, kt", height: 130, zero: true, series: [
+          ...G.models.map((m) => ({ kind: "line", name: m.model, t: m.t, y: m.tws, color: style(m.model).color, dash: style(m.model).dash })),
+          { kind: "line", name: "measured", t: G.obs.t, y: G.obs.tws, color: BOAT, width: 3 }] },
+        { label: "True wind direction, ° true", height: 96, domain: ax.domain, ticks: ax.ticks, fmt: ax.fmt, series: [
+          ...G.models.map((m) => ({ kind: "dots", name: m.model, t: m.t, y: m.twd.map(ax.wrap), color: style(m.model).color, marker: style(m.model).marker })),
+          { kind: "dots", name: "measured", t: G.obs.t, y: G.obs.twd.map(ax.wrap), color: BOAT }] },
+      ],
+      tip: (t) => {
+        const i = DA.nearest(G.obs.t, t);
+        return { head: `${hm(G.obs.t[i])} · ${phaseAt(G.obs.t[i])}`, rows: [
+          { name: "measured", value: `${num(G.obs.tws[i], 0, "kt")} ${compass(G.obs.twd[i])}`, color: BOAT },
+          ...G.models.map((m) => ({ name: m.model, value: `${num(m.tws[i], 0, "kt")} ${compass(m.twd[i])}${fin(m.gust[i]) ? " · gust " + num(m.gust[i], 0) : ""}`, color: style(m.model).color })),
+        ] };
+      },
+    }));
+  }
+
   // ------------------------------------------------------------ fleet
   const FL = D.fleet;
   if (FL) {

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core import timeutil
+from . import forecast as forecast_mod
 from .race_analysis import RaceAnalysis
 from .weather import compass
 
@@ -130,6 +131,27 @@ def findings(a: RaceAnalysis) -> list[Finding]:
         out.append(Finding("forecast", "Less wind than forecast",
                            "Every routing was heavy on wind speed against what we measured: "
                            + ", ".join(f"{m} by {(r - 1) * 100:.0f} %" for m, r in ratios) + ".", 0.75))
+
+    # GRIB models at our position: the leg where they missed the breeze most
+    fa = a.forecast
+    if fa is not None and fa.models:
+        legs = {}
+        for m in forecast_mod.headline_models(fa):
+            for w in m.windows:
+                if w["kind"] == "leg" and w.get("ratio") and w["n"] >= 3 and w["obs"] >= 10:
+                    legs.setdefault(w["name"], []).append((m.model, w))
+        if legs:
+            name, ws = max(legs.items(), key=lambda kv: abs(np.mean([1 - w["ratio"] for _, w in kv[1]])))
+            obs = ws[0][1]
+            light = [round((1 - w["ratio"]) * 100) for _, w in ws]
+            if all(x >= 20 for x in light) or all(x <= -20 for x in light):
+                word = "light" if light[0] > 0 else "heavy"
+                rng = f"{min(map(abs, light))}–{max(map(abs, light))} %" if len(light) > 1 else f"{abs(light[0])} %"
+                out.append(Finding("forecast", "The GRIBs at our position",
+                                   f"On {name} we sailed in {obs['obs']:.0f} kt ({obs['obs_min']:.0f}–{obs['obs_max']:.0f}, "
+                                   f"10-min means); the forecasts we had at the gun gave "
+                                   + ", ".join(f"{m} {w['fc']:.0f}" for m, w in ws)
+                                   + f" kt: {rng} {word}.", 0.8))
 
     # fleet: where each rival's gap opened most, and the rounding effect
     f = a.fleet

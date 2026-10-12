@@ -111,13 +111,90 @@ def build_data(b: Briefing) -> dict:
     lons = np.concatenate([p.route.lon for p in b.plans] + [b.course.lon if b.course.marks else np.array([])])
     land, coast = H.coastline((float(np.nanmin(lats)), float(np.nanmax(lats))), (float(np.nanmin(lons)), float(np.nanmax(lons))))
     return {
-        "tz": b.tz, "gun": int(round(b.gun)), "turning": b.turning_name,
+        "tz": b.tz, "gun": int(round(b.gun)), "turning": b.turning_label,
         "models": [model_data(p) for p in b.plans],
         "window": H.clean(b.window, 0) if b.window else None,
         "course": [{"name": m.name, "lat": round(m.lat, 5), "lon": round(m.lon, 5), "role": m.role} for m in b.course.marks],
         "islands": [{"name": i.name, "lat": H.clean(i.lat, 5), "lon": H.clean(i.lon, 5)} for i in b.islands],
         "land": land, "coast": coast,
+        "gribs": _grib_data(b.gribs),
+        "after": H.clean(b.after, 5) if b.after else None,
     }
+
+
+def _grib_data(g: dict | None) -> dict | None:
+    if not g or not g["models"]:
+        return None
+    core = [m for m in g["models"] if m["model"] in ("ECMWF", "GFS", "ACCESS")]
+    rest = [m for m in g["models"] if m not in core]
+    shown = (core + rest)[:3]
+    return {"route_model": g["route_model"],
+            "models": [{"model": m["model"], "t": [int(round(v)) for v in m["t"]], "tws": H.clean(m["tws"], 1),
+                        "twd": H.clean(m["twd"], 0), "gust": H.clean(m["gust"], 1), "mslp": H.clean(m["mslp"], 1),
+                        "change": m["change"]} for m in shown]}
+
+
+def _grib_section(b: Briefing, f: "_Fmt") -> str:
+    g = b.gribs
+    if not g:
+        return ""
+    notes = "".join(f"<li>{H.esc(n)}</li>" for n in g["notes"])
+    if not g["models"]:
+        return (f'<section id="gribs" class="wrap"><h2>Other models</h2><p class="lede">No readable GRIB covers the '
+                f'route.</p><ul class="warnings">{notes}</ul></section>')
+    ms = g["models"]
+    t = ms[0]["t"]
+    hours = [i for i in range(len(t)) if i == 0 or int(t[i] // 3600) != int(t[i - 1] // 3600)]
+    rows = []
+    for i in hours:
+        row = [H.esc(f.when(t[i]))]
+        for m in ms:
+            row.append(H.esc(f"{H.num(m['tws'][i], 0)} {compass(m['twd'][i])}" if np.isfinite(m["tws"][i]) else "–"))
+        rows.append(row)
+    table = H.table(["Time"] + [m["model"] for m in ms], rows, num_cols=set(range(len(ms) + 1)) - {0})
+    runs = "; ".join(f"{m['model']} {timeutil.fmt_local(m['run'], 'UTC', '%a %H')}Z run ({m['file']})" for m in ms)
+    changes = ", ".join(f"{m['model']} {f.when(m['change'])}" for m in ms if m["change"])
+    shown = _grib_data(g)["models"]
+    rest = len(ms) - len(shown)
+    return f"""
+<section id="gribs" class="wrap">
+  <h2>Every model along the {H.esc(g["route_model"])} route</h2>
+  <p class="lede">The GRIB files read along one route, so the models can be compared on the same water at the same
+  time, including models without a route table. {"Change times on this route: " + H.esc(changes) + "." if changes else ""}</p>
+  {H.figure("chart-gribs", "Wind along the " + g["route_model"] + " route in each GRIB model"
+            + (f" (the chart shows {len(shown)}; the table has all {len(ms)})" if rest else "") + ".", table, "Table view (on the hour)")}
+  <p class="small">Runs: {H.esc(runs)}.</p>
+  {"<ul class='warnings'>" + notes + "</ul>" if notes else ""}
+</section>"""
+
+
+def _after_section(b: Briefing, f: "_Fmt") -> str:
+    A = b.after
+    if not A:
+        return ""
+    turning = b.turning_label
+    tiles = [("Result", f"{A['place']} of {A['of']}" if A.get("place") else "–", "on corrected time"),
+             ("Elapsed", timeutil.fmt_duration(A["elapsed"]), f"finish {f.when(A['finish'])}"),
+             (f"At {turning}", f.when(A["turning_t"]) if A.get("turning_t") else "–",
+              "forecast " + _range(f, [p.eta_turning for p in b.plans])),
+             ("The change", f.when(A["change"]["t"]) if A.get("change") else "none",
+              ("forecast " + _range(f, [p.change.t for p in b.plans if p.change])) if A.get("change") else "")]
+    tiles_html = "".join(f'<div class="kpi"><div class="label">{H.esc(l)}</div><div class="value">{H.esc(v)}</div>'
+                         f'<div class="note">{H.esc(n)}</div></div>' for l, v, n in tiles)
+    moments = "".join(f'<div class="finding"><div class="finding-title">{H.esc(m["title"])} · {H.esc(f.hm(m["t"]))}</div>'
+                      f'<p>{H.esc(m["text"])}</p></div>' for m in A["moments"])
+    sails = ""
+    if A["sails"]:
+        sails = "<p>Sails we flew: " + H.esc(" → ".join(f"{s['sail']} ({f.hm(s['t0'])})" for s in A["sails"])) + ".</p>"
+    return f"""
+<section id="happened" class="wrap">
+  <h2>What actually happened</h2>
+  <div class="kpis">{tiles_html}</div>
+  <p class="lede">The forecasts below are the ones we had before the start: the {len(b.plans)} models that verified best
+  against our log, best first. Our measured wind (blue) is drawn over each meteogram.</p>
+  <div class="findings">{moments}</div>
+  {sails}
+</section>"""
 
 
 # ------------------------------------------------------------------------------------------- html
@@ -267,22 +344,26 @@ def render(b: Briefing) -> str:
     warns = "".join(f"<li>{H.esc(x)}</li>" for x in b.warnings)
     generated = timeutil.fmt_local(b.generated, b.tz, "%a %d %b %Y %H:%M")
     course_src = os.path.basename(b.course.source.split("#")[0]) if b.course.source else "none"
-    toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
-                  [("glance", "At a glance"), ("change", "The change"), ("meteograms", "Meteograms"),
-                   ("compare", "Side by side"), ("sails", "Sails"), ("routes", "Map"), ("finishes", "Finishes"),
-                   ("glossary", "Glossary")])
+    after = b.after is not None
+    toc_items = ([("happened", "What happened")] if after else []) + [
+        ("glance", "The forecast" if after else "At a glance"), ("change", "The change"), ("meteograms", "Meteograms"),
+        ("compare", "Side by side")] + ([("gribs", "Every model")] if b.gribs else []) + [
+        ("sails", "Sails"), ("routes", "Map"), ("finishes", "Finishes"), ("glossary", "Glossary")]
+    toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in toc_items)
+    eyebrow = "Day After · crew edition" if after else "Day Before · crew weather briefing"
 
     body = f"""
 <header class="wrap cover">
-  <div class="topbar"><div class="eyebrow">Day Before · crew weather briefing</div>
+  <div class="topbar"><div class="eyebrow">{H.esc(eyebrow)}</div>
   <button class="theme-btn" type="button">Theme: auto</button></div>
   <h1>{H.esc(b.race_name)}</h1>
   <p class="sub">{H.esc(b.boat + " · " if b.boat else "")}gun {H.esc(timeutil.fmt_local(b.gun, b.tz, "%a %d %b %H:%M"))} {H.esc(gun_label)} · models {H.esc(", ".join(models))}</p>
 </header>
 <nav class="toc"><div class="wrap">{toc}</div></nav>
 <main>
+{_after_section(b, f)}
 <section id="glance" class="wrap">
-  <h2>At a glance</h2>
+  <h2>{"The forecast we had" if after else "At a glance"}</h2>
   <div class="kpis">{kpi_html}</div>
   <p class="verdict">{H.esc(verdict)}</p>
   <p class="lede">These are forecasts, not promises: each routing assumes its model is right and that we sail the polar.
@@ -303,7 +384,8 @@ def render(b: Briefing) -> str:
     also position on the course. Read down: <span class="met-key"><span class="swatch-line" style="border-top-color: var(--met-tws)"></span>wind speed</span>
     (dashed: gusts), wind direction (dots), <span class="met-key"><span class="swatch-line" style="border-top-color: var(--met-pressure)"></span>pressure</span>,
     <span class="met-key"><span class="swatch-line" style="border-top-color: var(--met-temp)"></span>air temperature</span> and
-    <span class="met-key"><span class="swatch-line" style="border-top-color: var(--met-rain)"></span>rain</span>, Expedition's own colours.</p>
+    <span class="met-key"><span class="swatch-line" style="border-top-color: var(--met-rain)"></span>rain</span>, Expedition's own colours.{
+    ' Over the wind panels: <span class="met-key"><span class="swatch-line" style="border-top-color: var(--boat); border-top-width: 3px"></span>what we measured</span> (10-min means, blue dots for direction); the dashed line is when we actually rounded.' if after else ''}</p>
     <p>A front or southerly change shows up as the direction dots jumping, pressure bottoming and then rising, the
     temperature dropping and rain starting, usually within an hour or two of each other. The shaded band marks when
     the model's change passes; the solid line is our time at {H.esc(turning)}. Hover or tap for the numbers.</p>
@@ -316,6 +398,7 @@ def render(b: Briefing) -> str:
   watch the breeze and the barometer.</p>
   {H.figure("chart-compare", "Wind speed, direction and pressure along each model's route.", cmp_table, "Table view (on the hour)")}
 </section>
+{_grib_section(b, f)}
 <section id="sails" class="wrap">
   <h2>Sails, tacks and gybes</h2>
   <p class="lede">The sail each routing picks from the sail chart, and where it tacks or gybes. Use it to have the next
@@ -350,14 +433,19 @@ def render(b: Briefing) -> str:
   <p>Generated {H.esc(generated)} by Day After {H.esc(__version__)} · <a href="https://github.com/pishi-ishi/day-after">github.com/pishi-ishi/day-after</a></p>
 </footer>
 </main>"""
-    title = f"Day Before: {b.race_name}"
-    desc = f"Crew weather briefing for {b.race_name}: models {', '.join(models)}."
+    title = f"Day After (crew): {b.race_name}" if after else f"Day Before: {b.race_name}"
+    desc = (f"Crew edition for {b.race_name}: the forecast against what happened." if after
+            else f"Crew weather briefing for {b.race_name}: models {', '.join(models)}.")
     return H.page(title, body, build_data(b), scripts=("charts.js", "day_before.js"), description=desc)
+
+
+def filename(b: Briefing) -> str:
+    return f"day_after_{_slug(b.race_name)}_crew.html" if b.after else f"day_before_{_slug(b.race_name)}.html"
 
 
 def write(b: Briefing, out: str | None = None) -> str:
     if out is None:
-        out = os.path.join(b.folder, "out", f"day_before_{_slug(b.race_name)}.html")
+        out = os.path.join(b.folder, "out", filename(b))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     html_text = render(b)
     tmp = out + ".part"

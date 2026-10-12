@@ -60,6 +60,9 @@ class Briefing:
     notes: str
     warnings: list[str] = field(default_factory=list)
     generated: float = field(default_factory=time.time)
+    gribs: dict | None = None        # GRIB models along the first plan's route (forecast.grib_along_route)
+    after: dict | None = None        # crew edition: what actually happened (analysis/crew.py)
+    turning_text: str = ""           # display name from the race file's mark labels, when set
 
     @property
     def turning_name(self) -> str:
@@ -68,7 +71,7 @@ class Briefing:
 
     @property
     def turning_label(self) -> str:
-        return turning_label(self.turning_name)
+        return self.turning_text or turning_label(self.turning_name)
 
 
 def turning_label(name: str) -> str:
@@ -370,6 +373,25 @@ def pick_models(available: list[str], requested: list[str] | str | None) -> list
     return ordered[:MAX_CREW_MODELS]
 
 
+def make_plan(r: RouteTable, course: course_mod.Course, label: str, tz: str) -> ModelPlan:
+    marks = route_mark_times(r, course)
+    eta = next((m["t"] for m in marks if m["turning"]), None)
+    if eta is None and course.turning_mark is not None:
+        eta = eta_at(r, course.turning_mark.lat, course.turning_mark.lon)
+    ch = weather.detect_change(r.t, r.get("twd"), r.get("tws"))
+    if ch is not None:
+        ch.signs = weather.supporting_signs(ch, r.t, r.get("mslp") if r.has("mslp") else None,
+                                            r.get("airt") if r.has("airt") else None,
+                                            r.get("rain") if r.has("rain") else None)
+        ch.lat = float(np.interp(ch.t, r.t, r.lat))
+        ch.lon = float(np.interp(ch.t, r.t, r.lon))
+    grid = weather.wind_grid(r.t, r.get("twd"), r.get("tws"))
+    stats = plan_stats(r)
+    return ModelPlan(model=r.model, route=r, marks=marks, eta_turning=eta, change=ch, sail_runs=sail_runs(r),
+                     manoeuvres=manoeuvres(r), shifts=weather.hourly_shifts(grid),
+                     callouts=callouts(r, ch, eta, label, stats, tz), stats=stats)
+
+
 def build_briefing(folder: str, *, models: list[str] | str | None = None, turning_mark: str | None = None,
                    log=None) -> Briefing:
     inputs = detect.scan(folder)
@@ -425,29 +447,20 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
 
     gun, gun_source = _gun(proj, inputs, routes, tz, warnings)
 
-    plans = []
-    for r in plan_routes:
-        marks = route_mark_times(r, course)
-        eta = next((m["t"] for m in marks if m["turning"]), None)
-        if eta is None and course.turning_mark is not None:
-            eta = eta_at(r, course.turning_mark.lat, course.turning_mark.lon)
-        ch = weather.detect_change(r.t, r.get("twd"), r.get("tws"))
-        if ch is not None:
-            ch.signs = weather.supporting_signs(ch, r.t, r.get("mslp") if r.has("mslp") else None,
-                                                r.get("airt") if r.has("airt") else None,
-                                                r.get("rain") if r.has("rain") else None)
-            ch.lat = float(np.interp(ch.t, r.t, r.lat))
-            ch.lon = float(np.interp(ch.t, r.t, r.lon))
-        grid = weather.wind_grid(r.t, r.get("twd"), r.get("tws"))
-        stats = plan_stats(r)
-        plans.append(ModelPlan(model=r.model, route=r, marks=marks, eta_turning=eta, change=ch,
-                               sail_runs=sail_runs(r), manoeuvres=manoeuvres(r), shifts=weather.hourly_shifts(grid),
-                               callouts=callouts(r, ch, eta, label, stats, tz), stats=stats))
+    plans = [make_plan(r, course, label, tz) for r in plan_routes]
 
     notes = ""
     for p in inputs.notes:
         with open(p, encoding="utf-8", errors="replace") as f:
             notes += f.read().strip() + "\n\n"
+
+    gribs = None
+    if inputs.gribs or inputs.gribs_encrypted:
+        from .forecast import grib_along_route
+        try:
+            gribs = grib_along_route(inputs.gribs, plans[0].route, tz, encrypted=inputs.gribs_encrypted)
+        except Exception as e:  # noqa: BLE001 - the GRIBs are an extra; the briefing stands without them
+            warnings.append(f"GRIBs not read: {e}")
 
     name = race.get("name") or _yb_title(inputs) or os.path.basename(os.path.abspath(folder)).replace("_", " ")
     all_var = np.concatenate([r.variation for r in plan_routes])
@@ -456,5 +469,5 @@ def build_briefing(folder: str, *, models: list[str] | str | None = None, turnin
         gun=gun, gun_source=gun_source, plans=plans, other_routes=other_routes, summaries=summaries, course=course,
         islands=islands, window=change_window(plans, tz, label, bool(turning)),
         finishes=finish_table(routes, summaries, gun), variation_text=magvar.describe(all_var, var_override),
-        notes=notes.strip(), warnings=warnings,
+        notes=notes.strip(), warnings=warnings, gribs=gribs,
     )
