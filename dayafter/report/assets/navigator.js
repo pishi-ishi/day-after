@@ -140,4 +140,53 @@
       },
     }));
   }
+  // ------------------------------------------------------------ fleet
+  const FL = D.fleet;
+  if (FL) {
+    const gp = host("#chart-gaps .chart-body");
+    if (gp) {
+      DA.legend(host("#chart-gaps .legend"), [{ label: D.boat, color: BOAT }, ...FL.rivals.map((r) => ({ label: r.name, color: r.color, marker: "circle" }))]);
+      DA.mount(gp, () => DA.xyLines(gp, {
+        x0: 0, x1: FL.course, height: 300, zero: true, endLabels: true,
+        endFmt: (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`,
+        yLabel: "corrected minutes: behind us (+) or ahead of us (−)", xLabel: "distance along the course, nm",
+        xTicks: [{ x: 0, label: "Start" }, ...[10, 20, 30, 40, 50, 60, 70, 80, 100, 150, 200, 250].filter((v) => v < FL.course - 4).map((v) => ({ x: v, label: String(v) })), { x: FL.course, label: "Finish" }],
+        vlines: FL.turning ? [{ x: FL.turning, label: "turning mark" }] : [],
+        series: [{ name: D.boat, x: FL.gates, y: FL.gates.map(() => 0), color: BOAT, marker: "circle" },
+          ...FL.rivals.map((r) => ({ name: r.name, x: FL.gates, y: r.gaps, color: r.color, marker: "circle" }))],
+        snap: FL.gates, aria: "Corrected-time gap to each rival along the course",
+        tip: (k) => ({ head: `${FL.gates[k].toFixed(1)} nm (${FL.labels[k]}) · our corrected rank ${FL.ranks[k] > 0 ? FL.ranks[k] : "–"}`,
+          rows: FL.rivals.map((r) => ({ name: r.name, color: r.color, value: fin(r.gaps[k]) ? `${r.gaps[k] > 0 ? "+" : ""}${r.gaps[k].toFixed(1)} min` : "–" })) }),
+      }));
+    }
+    const rd = host("#chart-rounding .chart-body");
+    if (rd && FL.scatter.length) {
+      DA.legend(host("#chart-rounding .legend"), [{ label: D.boat, kind: "dot", color: BOAT },
+        ...FL.rivals.map((r) => ({ label: r.name, kind: "dot", color: r.color })), { label: "rest of the fleet", kind: "dot", color: "var(--fleet)" }]);
+      const xs = FL.scatter.map((p) => p.x);
+      const x0 = Math.min(...xs) - 600, x1 = Math.max(...xs) + 600;
+      const ticks = [];
+      for (let t = Math.ceil(x0 / 1800) * 1800; t <= x1; t += 1800) ticks.push({ x: t, label: hm(t) });
+      const colour = (p) => p.kind === "us" ? BOAT : p.kind === "rival" ? (FL.rivals.find((r) => r.name === p.name) || {}).color : "var(--fleet)";
+      const order = { other: 0, rival: 1, us: 2 };
+      DA.mount(rd, () => DA.scatter(rd, {
+        x0, x1, xTicks: ticks, height: 300, yLabel: "corrected time from the rounding to the finish, h", xLabel: "time of rounding",
+        aria: "Rounding time against corrected time home for every finisher",
+        points: FL.scatter.slice().sort((a, b) => order[a.kind] - order[b.kind]).map((p) => ({
+          x: p.x, y: p.y, color: colour(p), r: p.kind === "other" ? 4 : 5,
+          label: p.kind !== "other" || p.place <= 3 ? `${p.name}${p.place ? " (" + p.place + ")" : ""}` : null,
+          head: `${p.name}${p.place ? " · " + p.place : ""}`,
+          tip: [{ name: "rounded", value: hm(p.x) }, { name: "home, corrected", value: `${p.y.toFixed(2)} h` }] })),
+      }));
+    }
+    const fm = host("#chart-fleetmap .chart-body");
+    if (fm) {
+      DA.legend(host("#chart-fleetmap .legend"), [{ label: D.boat, color: BOAT }, ...FL.rivals.map((r) => ({ label: r.name, color: r.color, marker: "circle" }))]);
+      DA.mount(fm, () => DA.map(fm, {
+        land: D.land, coast: D.coast, islands: D.islands, marks: D.marks, aria: "Our track and the rivals' tracks",
+        routes: [...FL.rivals.map((r) => ({ name: r.name, t: r.track.t, lat: r.track.lat, lon: r.track.lon, color: r.color, width: 1.8, marker: "circle",
+          info: () => [] })), { name: D.boat, t: T.t, lat: T.lat, lon: T.lon, color: BOAT, width: 2.5, marker: "circle", info: trackRows }],
+      }));
+    }
+  }
 })();

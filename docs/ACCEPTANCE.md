@@ -97,7 +97,12 @@ The hole (10:30–10:57) must be found by the hole detector (SOG < 3 kt ≥ 10 m
 
 **Corrected rank of Llama II at gates:** 21 (5 nm), 21, 16, 17, 18, 18, 16, 17, **16 (islet)**, **21 (50 nm)**, 18, 11, 12, 14, 14, **15 (finish)**.
 
-**Rounding effect:** rounding time at Flinders Islet vs corrected time from rounding to finish, all 28 finishers: **r = −0.605** (±0.03). The podium (Disko Trooper, Borderline, Blue Planet) rounded at 16:34, 16:39 and 17:03, ranked 6th, 14th and 21st on corrected time at the islet, and sailed leg 2 1.60, 1.72 and 1.84 h faster than Llama II on corrected time.
+**Rounding effect:** rounding time at Flinders Islet vs corrected time from rounding to finish, all 28 finishers: **r = −0.605** (±0.03).
+
+> **Build notes (12 Oct 2026).** Day After's fleet progress partitions the course at the angle bisectors of its corners and holds the turning mark until each boat's closest approach to it. It reproduces every gate gap in `expected/` within 1.5 min except at the turning-mark gate, and matches the rank list above exactly. Two findings change this page:
+> - **The 80 nm gate is not an artefact.** Day After's values match the reference's at 80 nm (Ragtime −45, Kanreki −34, Calibre 12 −29 min), and the YB tracks show why: those boats were ahead on the water at 80 nm, then parked inside South Head (Ragtime 21:15–21:57, 0.6 nm in 42 min) while Llama II sailed straight through to finish at 21:44. The race on corrected time was decided in the last 2 nm. The selftest now checks the 80 nm gate too.
+> - **At the turning-mark gate Day After uses the rounding** (closest approach of the YB fixes to the islet). The reference used a projection crossing that fires when a boat is abeam of the islet, 1–2 fixes earlier (Smuggler 14:29 at 1.5 nm off vs 14:40 at 0.36 nm; Minerva 15:09 at 1.2 nm vs 15:30 at 0.37 nm). The 12 boats affected differ there by up to 20 min; the ranks at that gate still match (16).
+> - The rounding correlation is r = −0.594 (within tolerance). The podium (Disko Trooper, Borderline, Blue Planet) rounded at 16:34, 16:39 and 17:03, ranked 6th, 14th and 21st on corrected time at the islet, and sailed leg 2 1.60, 1.72 and 1.84 h faster than Llama II on corrected time.
 
 **Elapsed times** (`expected/fleet_elapsed_official.csv`, corrected ÷ TCC) vs YB "finish": YB is late by 0.9–45.3 min (mean 7.4). The app must warn when they disagree by more than 2 min and always use the official value.
 

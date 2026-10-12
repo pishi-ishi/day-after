@@ -108,7 +108,34 @@ def build_data(a: RaceAnalysis) -> dict:
         "forecasts": [{"model": f.model, "t": f.t, "tws": f.fc_tws, "twd": f.fc_twd, "change": f.change_t}
                       for f in a.forecasts],
         "land": land, "coast": coast, "islands": islands,
+        "fleet": fleet_data(a),
     }, 5)
+
+
+def fleet_data(a: RaceAnalysis) -> dict | None:
+    f = a.fleet
+    if f is None or f.us is None:
+        return None
+    rivals = []
+    for k, name in enumerate(f.rivals[:4]):
+        b = f.boat(name)
+        if b is None:
+            continue
+        idx = np.arange(0, len(b.t))
+        rivals.append({"name": b.name, "color": f"var(--r{k + 1})", "tcc": b.tcc,
+                       "gaps": [None if not np.isfinite(v) else round(v / 60.0, 1) for v in f.gaps[b.name]],
+                       "track": {"t": b.t[idx], "lat": b.lat[idx], "lon": b.lon[idx]}})
+    rset = {r["name"] for r in rivals}
+    pts = []
+    for b in f.boats:
+        if b.rounding is None or not b.elapsed:
+            continue
+        kind = "us" if b is f.us else "rival" if b.name in rset else "other"
+        pts.append({"name": b.name, "x": a.gun + b.rounding, "y": round((b.elapsed - b.rounding) * b.tcc / 3600.0, 3),
+                    "kind": kind, "place": b.result.place})
+    return {"gates": f.gates, "labels": f.gate_labels, "turning": f.turning_nm, "course": f.course_nm, "us": f.us.name,
+            "ranks": [int(x) for x in f.ranks[f.us.name]], "rivals": rivals, "scatter": pts, "r": f.rounding_r,
+            "n": len(f.boats)}
 
 
 # ------------------------------------------------------------------------------------------- html
@@ -207,6 +234,7 @@ def render(a: RaceAnalysis) -> str:
     fin_table = H.table(["Run", "Model", "From", "Finish", "Elapsed"], fin_rows, num_cols={3, 4}, stack=True,
                         row_class=lambda k: "used" if k == 0 else "")
     checks_html = "".join(_check_card(c) for c in a.checks)
+    fleet_html = _fleet_section(a)
 
     inputs = [f"Log: {', '.join(os.path.basename(p) for p in a.log.paths)} (Expedition {a.log.version or '?'}, "
               f"{len(a.log.channels)} channels)",
@@ -235,7 +263,7 @@ def render(a: RaceAnalysis) -> str:
     ]
     warns = "".join(f"<li>{H.esc(x)}</li>" for x in a.warnings)
     toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
-                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("calibration", "Calibration"),
+                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("fleet", "Fleet"), ("calibration", "Calibration"),
                    ("data", "Data & method")])
     category = (a.project.get("race") or {}).get("category") or ""
     body = f"""
@@ -277,6 +305,7 @@ def render(a: RaceAnalysis) -> str:
   <h3 class="sub-h">Predicted finishes</h3>
   {fin_table}
 </section>
+{fleet_html}
 <section id="calibration" class="wrap">
   <h2>Calibration</h2>
   <p class="lede">Checks on the instruments from the race itself. The corrections are applied in this report; fix them
@@ -297,6 +326,60 @@ def render(a: RaceAnalysis) -> str:
 </main>"""
     return H.page(f"Day After: {a.race_name}", body, build_data(a), scripts=("charts.js", "navigator.js"),
                   description=f"Post-race analysis of {a.race_name} for {a.boat}.")
+
+
+def _fleet_section(a: RaceAnalysis) -> str:
+    f = a.fleet
+    if f is None or f.us is None:
+        return ('<section id="fleet" class="wrap"><h2>Fleet</h2><p class="lede">No fleet comparison: it needs the YB '
+                'tracks (dayafter fetch-yb) and the results with TCCs.</p></section>')
+    tz = a.tz
+    mmss = lambda sec: timeutil.fmt_duration(abs(sec)).lstrip("0:") or "0"
+    tiles = []
+    for name in f.rivals[:4]:
+        g = f.gaps.get(name)
+        if g is None or not np.isfinite(g[-1]):
+            continue
+        tiles.append((name, f"{timeutil.fmt_duration(abs(g[-1]))[-5:] if abs(g[-1]) < 3600 else timeutil.fmt_duration(abs(g[-1]))}",
+                      f"{'ahead of' if g[-1] < 0 else 'behind'} us on corrected time · TCC {f.boat(name).tcc:.3f}"))
+    tiles_html = "".join(f'<div class="kpi"><div class="label">{H.esc(l)}</div><div class="value">{H.esc(v)}</div>'
+                         f'<div class="note">{H.esc(n)}</div></div>' for l, v, n in tiles)
+    head = ["Gate"] + ["Our rank"] + [f"{n} min" for n in f.rivals[:4]]
+    rows = []
+    for i, lab in enumerate(f.gate_labels):
+        r = f.ranks[f.us.name][i]
+        row = [H.esc(f"{f.gates[i]:.1f} nm" + ("" if lab.endswith("nm") else f" ({lab})")), str(r) if r > 0 else "–"]
+        for n in f.rivals[:4]:
+            v = f.gaps.get(n, np.full(len(f.gates), np.nan))[i]
+            row.append(H.esc(f"{v / 60:+.1f}") if np.isfinite(v) else "–")
+        rows.append(row)
+    gate_table = H.table(head, rows, num_cols=set(range(1, len(head))))
+    res_rows = []
+    for b in sorted(f.boats, key=lambda b: b.result.place or 99):
+        g = f.gaps.get(b.name, [np.nan])[-1]
+        res_rows.append([str(b.result.place or "–"), H.esc(b.name), H.esc(b.result.division), H.num(b.tcc, 3),
+                         H.esc(timeutil.fmt_duration(b.result.corrected)), H.esc(timeutil.fmt_duration(b.elapsed)),
+                         H.esc(timeutil.fmt_duration(b.yb_finish)) if b.yb_finish else "–",
+                         H.esc(f"{(b.yb_finish - b.elapsed) / 60:+.0f}") if b.yb_finish else "–",
+                         H.esc(timeutil.fmt_local(a.gun + b.rounding, tz, "%H:%M")) if b.rounding is not None else "–",
+                         H.esc(f"{g / 60:+.1f}") if np.isfinite(g) else "–"])
+    res_table = H.table(["Place", "Yacht", "Div", "TCC", "Corrected", "Elapsed", "YB elapsed", "YB late, min", "Rounded",
+                         "Gap to us, min"], res_rows, num_cols={0, 3, 4, 5, 6, 7, 8, 9},
+                        row_class=lambda k: "used" if sorted(f.boats, key=lambda b: b.result.place or 99)[k] is f.us else "")
+    r_txt = f" r = {f.rounding_r:.2f} over {len(f.boats)} finishers." if f.rounding_r is not None else ""
+    return f"""
+<section id="fleet" class="wrap">
+  <h2>Fleet</h2>
+  <p class="lede">Corrected-time gaps to the boats we race (same division, nearest TCC unless the race file names them),
+  every {f.gates[1] - f.gates[0]:.0f} nm along the course from the YB tracks. Elapsed times are corrected ÷ TCC from the
+  official results; YB's own finish times run late and are shown only for comparison.</p>
+  <div class="kpis">{tiles_html}</div>
+  {H.figure("chart-gaps", "Corrected-time gap to each rival along the course: below the line they were ahead of us.", gate_table, "Table view: rank and gaps by gate")}
+  {H.figure("chart-rounding", "Rounding time against the corrected time home, every finisher." + r_txt)}
+  {H.figure("chart-fleetmap", "Our track and the rivals' YB tracks (10-minute fixes).")}
+  <h3 class="sub-h">Results</h3>
+  {res_table}
+</section>"""
 
 
 def _ordinal_suffix(n: int) -> str:

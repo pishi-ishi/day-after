@@ -131,6 +131,34 @@ def findings(a: RaceAnalysis) -> list[Finding]:
                            "Every routing was heavy on wind speed against what we measured: "
                            + ", ".join(f"{m} by {(r - 1) * 100:.0f} %" for m, r in ratios) + ".", 0.75))
 
+    # fleet: where each rival's gap opened most, and the rounding effect
+    f = a.fleet
+    if f is not None and f.us is not None:
+        for name in f.rivals[:3]:
+            g = f.gaps.get(name)
+            if g is None or not np.isfinite(g).any():
+                continue
+            steps = [(f.gates[i - 1], f.gates[i], g[i] - g[i - 1]) for i in range(1, len(g)) if np.isfinite(g[i]) and np.isfinite(g[i - 1])]
+            if not steps:
+                continue
+            g0, g1, d = max(steps, key=lambda x: abs(x[2]))
+            end = g[-1]
+            out.append(Finding("fleet", f"Against {name}",
+                               f"{name} finished {_dur(end)} {'ahead of' if end < 0 else 'behind'} us on corrected time; "
+                               f"the biggest swing was {_dur(d)} {'their way' if d < 0 else 'our way'} between "
+                               f"{g0:.0f} and {g1:.0f} nm.", 0.65))
+        if f.rounding_r is not None and abs(f.rounding_r) >= 0.4 and f.us.rounding is not None:
+            podium = sorted((b for b in f.boats if b.result.place), key=lambda b: b.result.place)[:3]
+            ours = (f.us.elapsed - f.us.rounding) * f.us.tcc
+            gains = [(ours - (b.elapsed - b.rounding) * b.tcc) / 3600 for b in podium if b.rounding is not None]
+            later = f.rounding_r < 0
+            out.append(Finding("fleet", "Rounding time mattered",
+                               f"{'The later' if later else 'The earlier'} a boat rounded {label(a.course.turning_mark.name)}, the "
+                               f"faster it got home on corrected time (r = {f.rounding_r:.2f} over {len(f.boats)} finishers). "
+                               + (f"The podium rounded at {', '.join(hm(a.gun + b.rounding) for b in podium if b.rounding is not None)} "
+                                  f"and sailed home {min(gains):.1f}–{max(gains):.1f} h faster than us on corrected time."
+                                  if gains and min(gains) > 0 else ""), 0.85))
+
     # calibration
     fixes = []
     for c in a.checks:

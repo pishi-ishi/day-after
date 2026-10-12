@@ -16,7 +16,7 @@ from ..ingest.course import Course
 from ..ingest.expedition_log import Log, Timeline, read_logs
 from ..ingest.polar import Polar, read_polar
 from ..ingest.routes import RouteSummary, RouteTable, read_route_summary, read_route_table
-from . import calibration, plan, race
+from . import calibration, fleet as fleet_mod, plan, race
 from .briefing import _yb_title
 
 
@@ -56,6 +56,7 @@ class RaceAnalysis:
     model_rank: list[str]
     events: list[events_mod.Event]
     polar: Polar | None
+    fleet: fleet_mod.Fleet | None = None
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -221,6 +222,15 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
     except (OSError, ValueError, KeyError, IndexError) as e:
         warnings.append(f"polar not read: {e}")
 
+    say("fleet")
+    fl = None
+    try:
+        fl = load_fleet(inputs, proj, course, gun, results, boat_name, tl)
+        if fl is not None:
+            warnings += fl.warnings
+    except Exception as e:  # noqa: BLE001 - a fleet problem must not cost the rest of the report
+        warnings.append(f"fleet comparison skipped: {e}")
+
     name = race_cfg.get("name") or _yb_title(inputs) or os.path.basename(os.path.abspath(folder)).replace("_", " ")
     return RaceAnalysis(
         folder=os.path.abspath(folder), project=proj, inputs=inputs, tz=tz, race_name=name, boat=boat_name, gun=gun,
@@ -229,4 +239,40 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
         passages=passages, log=lg, tl=tl, wind=wind, checks=checks, fit=fit, k=k, holes=hole_list, change=change,
         phases=ph, routes=routes, all_routes=all_routes, summaries=summaries, splits=spl, forecasts=fcs,
         model_rank=plan.rank_models(fcs), events=events_mod.in_window(evs, gun - 3600, finish + 3600), polar=polar,
-        warnings=warnings)
+        fleet=fl, warnings=warnings)
+
+
+def load_fleet(inputs: detect.Inputs, proj: dict, course: Course, gun: float, results, boat_name: str,
+               tl: Timeline) -> fleet_mod.Fleet | None:
+    """YB tracks (saved AllPositions3, else a decoded tracks CSV) matched to the results."""
+    import json
+    if not results:
+        return None
+    tracks, names = {}, {}
+    for p in inputs.yb_positions:
+        tracks = {i: tr.deduplicated() for i, tr in yb.read_allpositions3(p).items()}
+        break
+    if not tracks:
+        for p in inputs.yb_tracks_csv:
+            tracks, names = yb.read_tracks_csv(p)
+            break
+    if not tracks:
+        return None
+    yb_fin = {}
+    for p in inputs.boatids:
+        names = {**yb.read_boatids(p), **names}
+    for p in inputs.yb_setup:
+        setup = yb.read_race_setup(p)
+        names = {**names, **{i: tm["name"] for i, tm in setup["teams"].items()}}
+        yb_fin = {i: tm["finished_at"] - gun for i, tm in setup["teams"].items() if tm.get("finished_at")}
+    for p in inputs.name_map:  # a verified id -> results-name map wins
+        with open(p, encoding="utf-8") as f:
+            names = {**names, **{int(k): v for k, v in json.load(f).items()}}
+    names = {i: n for i, n in names.items() if i in tracks}
+    k = np.arange(0, len(tl), 10)
+    own = (tl.t[k].astype(float), tl["Lat"][k], tl["Lon"][k])
+    cfg = proj.get("fleet") or {}
+    fl = fleet_mod.analyse_fleet(course, gun, results, boat_name, {i: (x.t, x.lat, x.lon) for i, x in tracks.items()},
+                                 names, own, step_nm=float((proj.get("course") or {}).get("gate_step_nm") or 5),
+                                 rivals=cfg.get("rivals") or None, yb_finish=yb_fin, turning_index=course.turning_index())
+    return fl

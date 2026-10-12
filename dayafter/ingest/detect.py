@@ -30,6 +30,8 @@ class Inputs:
     events_csv: list[str] = field(default_factory=list)
     yb_positions: list[str] = field(default_factory=list)
     yb_setup: list[str] = field(default_factory=list)
+    yb_tracks_csv: list[str] = field(default_factory=list)
+    name_map: list[str] = field(default_factory=list)
     boatids: list[str] = field(default_factory=list)
     results: list[str] = field(default_factory=list)
     bom: list[str] = field(default_factory=list)
@@ -72,11 +74,13 @@ def classify(path: str) -> str | None:
         return "expedition_db"
     if low == "race.dayafter.json":
         return "project"
-    if "allpositions3" in low:
+    if "allpositions3" in low and ext != ".hex":
         return "yb_positions"
     if "racesetup" in low and ext == ".json":
         return "yb_setup"
-    if re.search(r"-boatids\.(txt|csv)$", low):
+    if low.endswith(".json") and "results_name" in low:
+        return "name_map"
+    if re.search(r"boatids\.(txt|csv)$", low):
         return "boatids"
     if ext == ".axf" or b"[header]" in head[:2000] and b"[data]" in head:
         return "bom"
@@ -101,6 +105,8 @@ def classify(path: str) -> str | None:
         flat = first.replace(" ", "").lower()
         if flat.startswith("seq,name,lat,lon"):
             return "course_csv"
+        if flat.startswith("yb_id,yb_name,time_utc"):
+            return "yb_tracks_csv"
         if flat.startswith("place,yacht"):
             return "results"
         if flat.startswith("time_local,type,value"):

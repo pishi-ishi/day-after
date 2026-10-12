@@ -685,6 +685,57 @@ const DA = (() => {
     return null;
   }
 
+  // ------------------------------------------------------------------ scatter
+  /* spec = {x0, x1, xFmt, xTicks?, yLabel, yFmt?, xLabel, height?, points:[{x, y, color, shape?, r?, label?, tip:[rows],
+     head}], aria}. Points are drawn in order (context first, emphasised last); labelled points get direct labels. */
+  function scatter(root, spec) {
+    root.textContent = "";
+    const W = Math.max(300, root.clientWidth), H = spec.height || 300;
+    const m = { l: 50, r: 16, t: 14, b: 36 };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": spec.aria || "scatter" }, root);
+    const x = linear(spec.x0, spec.x1, m.l, W - m.r);
+    const ext = extent([spec.points.map((p) => p.y)]) || [0, 1];
+    const yt = niceTicks(ext[0], ext[1], 5);
+    const y = linear(yt[0], yt[yt.length - 1], H - m.b, m.t);
+    for (const v of yt) {
+      paint(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg), "var(--grid)", null, { strokeWidth: "1px" });
+      text(svg, m.l - 6, y(v) + 4, spec.yFmt ? spec.yFmt(v) : String(v), { "text-anchor": "end" });
+    }
+    if (spec.yLabel) text(svg, m.l, 10, spec.yLabel, { class: "t-ink", "font-size": 12 });
+    for (const tk of spec.xTicks || []) {
+      const px = x(tk.x);
+      paint(el("line", { x1: px, x2: px, y1: H - m.b, y2: H - m.b + 4 }, svg), "var(--muted)", null, { strokeWidth: "1px" });
+      text(svg, px, H - m.b + 16, tk.label, { "text-anchor": "middle" });
+    }
+    if (spec.xLabel) text(svg, (m.l + W - m.r) / 2, H - 4, spec.xLabel, { "text-anchor": "middle" });
+    const pts = spec.points.map((p) => ({ p, px: x(p.x), py: y(p.y) }));
+    for (const q of pts) marker(svg, q.p.shape || "circle", q.px, q.py, q.p.r || 4, q.p.color);
+    const placed = [];
+    for (const q of pts) {
+      if (!q.p.label) continue;
+      const w = q.p.label.length * 6.4, right = q.px < W - w - 20;
+      const box = [right ? q.px + 8 : q.px - 8 - w, q.py - 12, right ? q.px + 8 + w : q.px - 8, q.py + 2];
+      if (placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+      placed.push(box);
+      text(svg, right ? q.px + 8 : q.px - 8, q.py - 2, q.p.label, { "text-anchor": right ? "start" : "end", class: "t-ink" });
+    }
+    const hit = paint(el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }, svg), null, "transparent");
+    const ring = paint(el("circle", { cx: 0, cy: 0, r: 8 }, svg), "var(--ink)", null, { strokeWidth: "1.5px", display: "none", pointerEvents: "none" });
+    function onMove(ev) {
+      const r = svg.getBoundingClientRect();
+      const mx = (ev.clientX - r.left) * (W / r.width), my = (ev.clientY - r.top) * (H / r.height);
+      let best = null, bd = 24 * 24;
+      for (const q of pts) { const d = (q.px - mx) ** 2 + (q.py - my) ** 2; if (d < bd) { bd = d; best = q; } }
+      if (!best) { ring.style.display = "none"; hideTip(); return; }
+      ring.setAttribute("cx", best.px); ring.setAttribute("cy", best.py); ring.style.display = "";
+      showTip(ev.clientX, ev.clientY, best.p.head || "", best.p.tip || []);
+    }
+    hit.addEventListener("pointermove", onMove);
+    hit.addEventListener("pointerdown", onMove);
+    hit.addEventListener("pointerleave", () => { ring.style.display = "none"; hideTip(); });
+    return null;
+  }
+
   // ------------------------------------------------------------------ legend (HTML)
   function legend(host, items) {
     host.textContent = "";
@@ -740,5 +791,5 @@ const DA = (() => {
     });
   }
 
-  return { setZone, hm, dayLabel, mount, timePanels, timeRows, xyLines, map, legend, emit, fin, nearest: nearestIndex, themeButton, dirAxis };
+  return { setZone, hm, dayLabel, mount, timePanels, timeRows, xyLines, scatter, map, legend, emit, fin, nearest: nearestIndex, themeButton, dirAxis };
 })();

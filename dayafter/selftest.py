@@ -258,6 +258,53 @@ def check_navigator_report() -> str:
     return f"self-contained, {len(html) // 1024} KB"
 
 
+# --------------------------------------------------------------------------------------------- M2: fleet
+
+def _fleet():
+    a = _analysis()
+    assert a.fleet is not None and a.fleet.us is not None, "no fleet comparison"
+    return a, a.fleet
+
+
+def check_fleet_finish_gaps() -> str:
+    a, f = _fleet()
+    want = {"Calibre 12": -648, "Kanreki": -978, "Ragtime": -72, "Western Morning": 1, "Wild Oats": -98, "Disko Trooper": -6773}
+    for name, sec in want.items():
+        got = f.gaps[f.boat(name).name][-1]
+        assert abs(got - sec) <= 1, (name, got, sec)
+    assert f.rivals == ["Calibre 12", "Kanreki", "Ragtime"], f.rivals
+    assert any("YB's finish differs" in w for w in f.warnings), "no warning about YB finish times"
+    return "finish gaps to the second; default rivals Calibre 12, Kanreki, Ragtime; YB finish warning raised"
+
+
+def check_fleet_gates() -> str:
+    import numpy as np
+    a, f = _fleet()
+    rows = {r["yacht"]: r for r in _expected("corrected_gap_to_llama_by_gate_min.csv")}
+    n = worst = 0
+    for b in f.boats:
+        e = rows[b.name]
+        for c in (c for c in e if c not in ("yacht", "45", "44.941")):
+            gi = int(np.argmin(np.abs(f.gates - float(c))))
+            v = f.gaps[b.name][gi] / 60.0
+            err = abs(v - float(e[c])) if np.isfinite(v) else 999.0
+            assert err <= 1.5, (b.name, c, v, e[c])
+            n += 1
+            worst = max(worst, err)
+    for b in f.boats:  # at the turning mark the gate is the rounding: the closest approach (see ACCEPTANCE M2)
+        gi = int(np.argmin(np.abs(f.gates - f.turning_nm)))
+        assert abs(b.gates[gi] - b.rounding) <= 1, (b.name, b.gates[gi], b.rounding)
+    ranks = [int(x) for x, lab in zip(f.ranks[f.us.name], f.gate_labels)]
+    gates = list(np.round(f.gates, 1))
+    want = {5.0: 21, 10.0: 21, 15.0: 16, 20.0: 17, 25.0: 18, 30.0: 18, 35.0: 16, 40.0: 17, 50.0: 21, 55.0: 18, 60.0: 11,
+            65.0: 12, 70.0: 14, 75.0: 14}
+    for g, r in want.items():
+        assert ranks[gates.index(g)] == r, (g, ranks[gates.index(g)], r)
+    assert ranks[-1] == 15 and ranks[int(np.argmin(np.abs(f.gates - f.turning_nm)))] == 16, ranks
+    assert abs(f.rounding_r - (-0.605)) <= 0.03, f.rounding_r
+    return f"{n} gate gaps within {worst:.2f} min (80 nm included); ranks 21 … 16 at the islet … 15; r = {f.rounding_r:.3f}"
+
+
 CHECKS = [
     ("time zones and durations", check_time_zones),
     ("YB decoder test vector", check_yb_vector),
@@ -273,6 +320,8 @@ CHECKS = [
     ("M1 phases, hole and change", check_phases),
     ("M1 finish and result", check_finish),
     ("M1 navigator report", check_navigator_report),
+    ("M2 fleet finish gaps and rivals", check_fleet_finish_gaps),
+    ("M2 gates, ranks and rounding effect", check_fleet_gates),
 ]
 
 

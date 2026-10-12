@@ -159,3 +159,22 @@ def fetch_race(key: str, out_folder: str, *, log=print) -> dict[str, str]:
     except (net.FetchError, ValueError) as e:
         log(f"RaceSetup not saved ({e}); boat names will come from the boat-ids file or the results")
     return saved
+
+
+def read_tracks_csv(path: str) -> tuple[dict[int, Track], dict[int, str]]:
+    """Decoded YB tracks as CSV (`yb_id,yb_name,time_utc,lat,lon`), e.g. fixtures/flinders_2026/yb_fleet_tracks.csv."""
+    import csv
+    import datetime as dt
+    rows: dict[int, list] = {}
+    names: dict[int, str] = {}
+    with open(path, encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            i = int(r["yb_id"])
+            names[i] = r.get("yb_name", "")
+            t = dt.datetime.strptime(r["time_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp()
+            rows.setdefault(i, []).append((t, float(r["lat"]), float(r["lon"])))
+    out = {}
+    for i, v in rows.items():
+        a = np.array(sorted(v))
+        out[i] = Track(tracker_id=i, t=a[:, 0], lat=a[:, 1], lon=a[:, 2]).deduplicated()
+    return out, names
