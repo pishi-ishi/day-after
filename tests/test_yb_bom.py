@@ -38,7 +38,7 @@ def encode(flags: int, ref: int, trackers: dict[int, list[tuple]]) -> bytes:
 
 
 def test_yb_fixture_vector():
-    raw = bytes.fromhex(open(os.path.join(FIXTURES, "flinders_2026", "yb_allpositions3_head_team2.hex")).read().strip())
+    raw = bytes.fromhex(open(os.path.join(FIXTURES, "flinders_2026", "yb_allpositions3_head_team2.hex"), encoding="ascii").read().strip())
     tr = yb.decode_allpositions3(raw)[2]
     assert len(tr.t) == 121
     assert (tr.t[-1], round(tr.lat[-1], 5), round(tr.lon[-1], 5)) == (1790460000, -33.8741, 151.2332)
@@ -79,7 +79,7 @@ def test_race_setup_and_boatids(tmp_path):
     assert info["gun"] == 1792119600 and info["teams"][2]["name"] == "Wot's Next"
     assert info["associated"] == [("1. Flinders Islet Race 2026", "Bwps2026")]
     p = tmp_path / "BWPS2026-boatids.txt"
-    p.write_text("1,Spare 1\n2,Wot's Next\nnot a row\n")
+    p.write_text("1,Spare 1\n2,Wot's Next\nnot a row\n", encoding="utf-8")
     assert yb.read_boatids(str(p)) == {1: "Spare 1", 2: "Wot's Next"}
 
 

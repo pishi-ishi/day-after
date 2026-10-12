@@ -18,6 +18,18 @@ def _is_wsl() -> bool:
         return False
 
 
+def open_url(url: str) -> None:
+    """Open an http URL in the default browser (on WSL2, the Windows browser)."""
+    if _is_wsl():
+        if shutil.which("wslview"):
+            subprocess.run(["wslview", url], check=False)
+            return
+        if shutil.which("cmd.exe"):
+            subprocess.run(["cmd.exe", "/c", "start", "", url.replace("&", "^&")], check=False, cwd="/mnt/c")
+            return
+    webbrowser.open(url)
+
+
 def open_in_browser(path: str) -> None:
     """Open a local file: wslview or cmd.exe on WSL2, the default browser elsewhere."""
     path = os.path.abspath(path)
@@ -60,7 +72,7 @@ def cmd_build(args) -> int:
         with open(args.race_file, encoding="utf-8") as f:
             project = json.load(f)
     a = analyse(args.folder, args.extra or [], project, log=lambda m: print(f"  {m}"))
-    eds = [e.strip() for e in (args.editions or ",".join(editions_mod.EDITIONS)).split(",") if e.strip()]
+    eds = [e.strip() for e in (args.editions or ",".join(editions_mod.DEFAULT_EDITIONS)).split(",") if e.strip()]
     out_dir = None
     if args.out:
         out_dir = args.out if not args.out.lower().endswith(".html") else os.path.dirname(os.path.abspath(args.out))
@@ -104,18 +116,16 @@ def cmd_selftest(args) -> int:
 
 
 def cmd_serve(args) -> int:
-    print("The browser app arrives with milestone M5. Until then:\n"
-          "  dayafter before <race folder> [--open]     crew weather briefing from Expedition route tables\n"
-          "  dayafter build <race folder> [--open]      the Day After report (navigator edition)\n"
-          "  dayafter fetch-yb <race key> <folder>      save the YB fleet tracks (do it on race day)\n"
-          "  dayafter fetch-bom <wmo ...> --out <folder> save BOM coastal observations (within 72 h)\n"
-          "  dayafter selftest                         check the build against the Flinders 2026 numbers")
+    from .app.server import serve
+    serve(port=getattr(args, "port", 0) or 0, open_browser=not getattr(args, "no_browser", False),
+          folder=getattr(args, "folder", None))
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="dayafter", description="Day After: post-race and pre-race analysis for offshore racing.")
     p.add_argument("--version", action="version", version=f"Day After {__version__}")
+    p.add_argument("--selftest", action="store_true", help="same as the selftest command")
     sub = p.add_subparsers(dest="command")
 
     b = sub.add_parser("before", help="build the Day Before crew briefing from a race folder")
@@ -130,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("folder", help="race folder: Expedition log, course, route tables, results, events (searched recursively)")
     d.add_argument("--extra", action="append", help="another folder with inputs for this race (repeatable)")
     d.add_argument("--race-file", help="race.dayafter.json to use instead of the one in the folder")
-    d.add_argument("--editions", help="editions to write, comma-separated (default: all: navigator,crew)")
+    d.add_argument("--editions", help="editions to write, comma-separated: navigator, skipper, crew, 7seas (default: navigator,skipper,crew)")
     d.add_argument("--out", help="output folder (default: <folder>/out)")
     d.add_argument("--season", help="season database (default: season.sqlite next to the app, or $DAYAFTER_SEASON)")
     d.add_argument("--no-season", action="store_true", help="do not store this race in the season database")
@@ -152,13 +162,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--quiet", action="store_true")
     s.set_defaults(func=cmd_selftest)
 
-    v = sub.add_parser("serve", help="start the browser app (milestone M5)")
+    v = sub.add_parser("serve", help="start the app in your browser (the default when no command is given)")
+    v.add_argument("folder", nargs="?", help="race folder to open")
+    v.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: any free port)")
+    v.add_argument("--no-browser", action="store_true", help="print the link instead of opening the browser")
     v.set_defaults(func=cmd_serve)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.selftest:
+        return cmd_selftest(argparse.Namespace(quiet=False))
     if not getattr(args, "func", None):
         return cmd_serve(args)
     try:

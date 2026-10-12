@@ -11,19 +11,21 @@ Day After reads your Expedition instrument log, the optimal routes and GRIB fore
 
 Reports come in four editions (navigator, skipper/owner, crew and a branded 7 Seas Marine client edition). A **Day Before** mode turns the routings into a crew weather briefing: meteograms, the window when a change could arrive vs your ETA at the turning mark, the planned sail changes and the expected tacks and gybes.
 
-> **Status: the Day Before crew briefing works (run it from source, below).** The post-race report, the browser app and the downloadable binaries are being built; see [`HANDOVER.md`](HANDOVER.md) for the plan and [`docs/DESIGN.md`](docs/DESIGN.md) for the design.
+> **Status (12 Oct 2026): all five milestones are built.** The Day Before briefing, the four post-race editions, the browser app, the season database and `--selftest` work from source and as one-file binaries; see [`HANDOVER.md`](HANDOVER.md) for the build notes.
 
-## Planned download
+## Download
 
-One file per operating system, no install, no Python needed. Releases will go on the [releases page](https://github.com/pishi-ishi/day-after/releases) with SHA-256 checksums here:
+One file per operating system, no install, no Python needed. Get it from the [latest release](https://github.com/pishi-ishi/day-after/releases/latest):
 
 | OS | File |
 |---|---|
-| Windows 10/11 64-bit | `day-after.exe` |
-| macOS | `day-after-macos` |
-| Linux | `day-after-linux` |
+| Windows 10/11 64-bit | `dayafter-windows-x64.exe` |
+| macOS (Apple silicon) | `dayafter-macos-arm64` |
+| Linux 64-bit | `dayafter-linux-x64` |
 
-Run it and Day After opens in your web browser at `http://127.0.0.1:<port>`. Close the console window to quit.
+Each release lists the SHA-256 of every file in its notes and in `SHA256SUMS.txt`. Check a download with `certutil -hashfile dayafter-windows-x64.exe SHA256` (Windows), `shasum -a 256 dayafter-macos-arm64` (macOS) or `sha256sum dayafter-linux-x64` (Linux).
+
+Run it and Day After opens in your web browser at `http://127.0.0.1:<port>`: choose the race folder, check the inputs list, and press **Build**. Keep the console window open while you use it; close it to quit. On macOS, run `chmod +x dayafter-macos-arm64` once and allow it under System Settings → Privacy & Security (the binary is not notarised). `dayafter --selftest` checks the binary; with your private `data/` folder next to it (or `DAYAFTER_DATA` pointing at it) it also rebuilds every Flinders Islet 2026 number.
 
 ## How a race works
 
@@ -37,7 +39,8 @@ Until the binaries are released, run Day After from a checkout with Python 3.12 
 ```bash
 git clone https://github.com/pishi-ishi/day-after && cd day-after
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e .
-.venv/bin/dayafter --help
+.venv/bin/dayafter            # the app, in your browser
+.venv/bin/dayafter --help     # the command line
 ```
 
 **Day Before (race eve and race morning).** Export one routing table per model from Expedition, plus the "summary of all routes", into the race folder (any layout works; Day After finds files by content), then:
@@ -88,7 +91,9 @@ It writes one HTML file per edition into `out/`: the **navigator** edition (over
 ## Repository layout
 
 ```
-dayafter/            application package (to be built)
+dayafter/            application package: ingest/, core/, analysis/, report/, app/, season.py, cli.py
+packaging/           icon and PyInstaller build script (used by .github/workflows/release.yml)
+tests/               pytest suite (tests that need data/ skip)
 assets/              logo, bundled coastlines
 fixtures/            public test vectors and expected results (Flinders Islet 2026)
 reference/           scripts and figures behind the hand-made Flinders report

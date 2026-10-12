@@ -196,7 +196,7 @@ def _grib_section(a: RaceAnalysis) -> str:
                       row_class=lambda k: "hole" if legs[k].kind == "hole" else "")
     shown = ", ".join(m.model for m in forecast_mod.headline_models(fa))
     mh = (f" Forecast 10 m wind is scaled by {fa.masthead_factor:.2f} to masthead height." if fa.masthead_factor != 1
-          else " Forecast wind is the model's 10 m wind, unscaled (set boat.masthead_factor in the race file to scale it).")
+          else " Forecast wind is the model's 10 m wind, unscaled (set boat.masthead_wind_factor in the race file to scale it).")
     return f"""
   <h3 class="sub-h">Forecast at our position (GRIB)</h3>
   <p class="lede">Each model's GRIB read where we actually were, every 10 minutes, against the wind we measured there
@@ -218,7 +218,7 @@ def _check_card(c) -> str:
             f'<span class="check-value">{H.esc(c.value)}</span></div><p>{H.esc(c.detail)}</p>{fix}</div>')
 
 
-def render(a: RaceAnalysis, season: dict | None = None) -> str:
+def render(a: RaceAnalysis, season: dict | None = None, edition: str = "navigator") -> str:
     tz = a.tz
     hm = lambda t: timeutil.fmt_local(t, tz, "%H:%M") if t is not None else "–"
     hms = lambda t: timeutil.fmt_local(t, tz, "%H:%M:%S") if t is not None else "–"
@@ -336,20 +336,10 @@ def render(a: RaceAnalysis, season: dict | None = None) -> str:
         "(bilinear in space, linear in time); the change in a forecast is found the same way as in our log.",
     ]
     warns = "".join(f"<li>{H.esc(x)}</li>" for x in a.warnings)
-    toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
-                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("fleet", "Fleet"),
-                   ("performance", "Performance"), ("calibration", "Calibration")]
-                  + ([("season", "Season")] if season and season.get("races") else []) + [("data", "Data & method")])
     category = (a.project.get("race") or {}).get("category") or ""
-    body = f"""
-<header class="wrap cover">
-  <div class="topbar"><div class="eyebrow">Day After · navigator edition</div>
-  <button class="theme-btn" type="button">Theme: auto</button></div>
-  <h1>{H.esc(a.race_name)}</h1>
-  <p class="sub">{H.esc(a.boat)} · {H.esc(race_day)} · gun {H.esc(hm(a.gun))} {H.esc(zone)}{H.esc(" · " + category if category else "")}</p>
-</header>
-<nav class="toc"><div class="wrap">{toc}</div></nav>
-<main>
+    generated = timeutil.fmt_local(__import__("time").time(), tz, "%a %d %b %Y %H:%M")
+    parts = {
+        "overview": f"""
 <section id="overview" class="wrap">
   <h2>Overview</h2>
   <div class="kpis">{tiles_html}</div>
@@ -358,19 +348,20 @@ def render(a: RaceAnalysis, season: dict | None = None) -> str:
   {notes_html}
   {H.figure("chart-map", "Our track (blue) with the optimal routes and the course. Drag to pan; click, then scroll to zoom.", marks_table, "Table view: mark passages")}
   {H.figure("chart-timeline", "Speed and wind through the race. The bar underneath is the phases; shaded: holes.", phases_table, "Table view: phases")}
-</section>
+</section>""",
+        "phases": f"""
 <section id="phases" class="wrap">
   <h2>Phases</h2>
   <p class="lede">Legs between the key marks, split where the wind changed; holes are listed on their own and overlap
   the legs around them.</p>
   {phases_table}
-</section>
-<section id="plan" class="wrap">
-  <h2>Plan vs reality</h2>
+</section>""",
+        "plan_head": f"""
   <p class="lede">Our time at every mark against each model's optimal route. Above the line we were behind the route,
   below it ahead.</p>
   {H.figure("chart-splits", "Minutes behind (+) or ahead (−) of each route, by distance along the course.")}
-  {splits_table}
+  {splits_table}""",
+        "plan_rest": f"""
   <h3 class="sub-h">Forecast along each route</h3>
   {H.figure("chart-forecast", "Each model's wind along its own route against our measured wind (10-min means over the ground).")}
   {score_table}
@@ -379,34 +370,75 @@ def render(a: RaceAnalysis, season: dict | None = None) -> str:
   we passed the finish point.</p>
   {_grib_section(a)}
   <h3 class="sub-h">Predicted finishes</h3>
-  {fin_table}
-</section>
-{fleet_html}
-{performance_section(a)}
+  {fin_table}""",
+        "score_table": score_table,
+        "fleet": fleet_html,
+        "performance": performance_section(a),
+        "calibration": f"""
 <section id="calibration" class="wrap">
   <h2>Calibration</h2>
   <p class="lede">Checks on the instruments from the race itself. The corrections are applied in this report; fix them
   in the instrument system before the next race.</p>
   <div class="checks">{checks_html}</div>
-</section>
-{season_section(season, a)}
+</section>""",
+        "season": season_section(season, a),
+        "data": f"""
 <section id="data" class="wrap">
   <h2>Data & method</h2>
   <ul>{"".join(f"<li>{H.esc(x)}</li>" for x in inputs)}</ul>
   <ul>{"".join(f"<li>{H.esc(x)}</li>" for x in methods)}</ul>
   {"<p><strong>Warnings</strong></p><ul class='warnings'>" + warns + "</ul>" if warns else ""}
-</section>
+</section>""",
+        "footer": f"""
 <footer class="wrap">
   <p>Coastline: Natural Earth (public domain) and © OpenStreetMap contributors (ODbL).</p>
-  <p>Generated {H.esc(timeutil.fmt_local(__import__("time").time(), tz, "%a %d %b %Y %H:%M"))} by Day After {H.esc(__version__)} ·
+  <p>Generated {H.esc(generated)} by Day After {H.esc(__version__)} ·
   <a href="https://github.com/pishi-ishi/day-after">github.com/pishi-ishi/day-after</a></p>
-</footer>
+</footer>""",
+        "sub": f"{a.boat} · {race_day} · gun {hm(a.gun)} {zone}" + (f" · {category}" if category else ""),
+        "tiles": tiles_html, "findings": find_html, "fleet_compact": _fleet_section(a, compact=True),
+        "findings_top": "".join(f'<div class="finding {f.kind}"><div class="finding-title">{H.esc(f.title)}</div>'
+                                f'<p>{H.esc(f.text)}</p></div>' for f in fs[:6]), "notes": notes_html, "marks_table": marks_table,
+    }
+    if edition != "navigator":
+        from .skipper import render_body
+        body = render_body(a, parts, edition)
+        title = f"Day After ({'skipper' if edition == 'skipper' else '7 Seas'}): {a.race_name}"
+        return H.page(title, body, build_data(a), scripts=("charts.js", "navigator.js"),
+                      description=f"Post-race report on {a.race_name} for {a.boat}.",
+                      body_class="brand-7s" if edition == "7seas" else "")
+    toc = "".join(f'<a href="#{i}">{H.esc(t)}</a>' for i, t in
+                  [("overview", "Overview"), ("phases", "Phases"), ("plan", "Plan vs reality"), ("fleet", "Fleet"),
+                   ("performance", "Performance"), ("calibration", "Calibration")]
+                  + ([("season", "Season")] if season and season.get("races") else []) + [("data", "Data & method")])
+    body = f"""
+<header class="wrap cover">
+  <div class="topbar"><div class="eyebrow">Day After · navigator edition</div>
+  <button class="theme-btn" type="button">Theme: auto</button></div>
+  <h1>{H.esc(a.race_name)}</h1>
+  <p class="sub">{H.esc(parts["sub"])}</p>
+</header>
+<nav class="toc"><div class="wrap">{toc}</div></nav>
+<main>
+{parts["overview"]}
+{parts["phases"]}
+<section id="plan" class="wrap">
+  <h2>Plan vs reality</h2>
+{parts["plan_head"]}
+{parts["plan_rest"]}
+</section>
+{parts["fleet"]}
+{parts["performance"]}
+{parts["calibration"]}
+{parts["season"]}
+{parts["data"]}
+{parts["footer"]}
 </main>"""
     return H.page(f"Day After: {a.race_name}", body, build_data(a), scripts=("charts.js", "navigator.js"),
                   description=f"Post-race analysis of {a.race_name} for {a.boat}.")
 
 
-def _fleet_section(a: RaceAnalysis) -> str:
+def _fleet_section(a: RaceAnalysis, compact: bool = False) -> str:
     f = a.fleet
     if f is None or f.us is None:
         return ('<section id="fleet" class="wrap"><h2>Fleet</h2><p class="lede">No fleet comparison: it needs the YB '
@@ -445,6 +477,24 @@ def _fleet_section(a: RaceAnalysis) -> str:
                          "Gap to us, min"], res_rows, num_cols={0, 3, 4, 5, 6, 7, 8, 9},
                         row_class=lambda k: "used" if sorted(f.boats, key=lambda b: b.result.place or 99)[k] is f.us else "")
     r_txt = f" r = {f.rounding_r:.2f} over {len(f.boats)} finishers." if f.rounding_r is not None else ""
+    if compact:  # skipper edition: us and the rivals only, no fleet map
+        keep = [b for b in sorted(f.boats, key=lambda b: b.result.place or 99) if b is f.us or b.name in f.rivals[:4]]
+        rows = [[str(b.result.place or "–"), H.esc(b.name), H.num(b.tcc, 3), H.esc(timeutil.fmt_duration(b.result.corrected)),
+                 H.esc(timeutil.fmt_duration(b.elapsed)),
+                 H.esc(timeutil.fmt_local(a.gun + b.rounding, tz, "%H:%M")) if b.rounding is not None else "–",
+                 H.esc(f"{f.gaps.get(b.name, [np.nan])[-1] / 60:+.1f}") if b is not f.us else "–"] for b in keep]
+        small = H.table(["Place", "Yacht", "TCC", "Corrected", "Elapsed", "Rounded", "Gap to us, min"], rows,
+                        num_cols={0, 2, 3, 4, 5, 6}, row_class=lambda k: "used" if keep[k] is f.us else "")
+        return f"""
+<section id="fleet" class="wrap">
+  <h2>Fleet</h2>
+  <p class="lede">Corrected-time gaps to the boats we race, every {f.gates[1] - f.gates[0]:.0f} nm along the course
+  (YB tracks, official TCCs).</p>
+  <div class="kpis">{tiles_html}</div>
+  {H.figure("chart-gaps", "Corrected-time gap to each rival along the course: below the line they were ahead of us.")}
+  {H.figure("chart-rounding", "Rounding time against the corrected time home, every finisher." + r_txt)}
+  {small}
+</section>"""
     return f"""
 <section id="fleet" class="wrap">
   <h2>Fleet</h2>
@@ -468,11 +518,11 @@ def filename(a: RaceAnalysis) -> str:
     return f"day_after_{_slug(a.race_name)}_navigator.html"
 
 
-def write(a: RaceAnalysis, out: str | None = None, season: dict | None = None) -> str:
+def write(a: RaceAnalysis, out: str | None = None, season: dict | None = None, edition: str = "navigator") -> str:
     if out is None:
         out = os.path.join(a.folder, "out", filename(a))
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    text = render(a, season)
+    text = render(a, season, edition)
     tmp = out + ".part"
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(text)

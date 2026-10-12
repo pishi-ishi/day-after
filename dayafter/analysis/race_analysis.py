@@ -229,7 +229,7 @@ def analyse(folder: str, extra_folders: list[str] | None = None, project: dict |
         say("forecast at our position")
         try:
             fa = forecast_mod.forecast_at_us(inputs.gribs, tl, wind, start, finish, gun, change.onset if change else None,
-                                             ph, masthead_factor=float(boat_cfg.get("masthead_factor") or 1.0),
+                                             ph, masthead_factor=float(boat_cfg.get("masthead_wind_factor") or boat_cfg.get("masthead_factor") or 1.0),
                                              bom_files=inputs.bom, tz=tz, log=say)
         except Exception as e:  # noqa: BLE001 - a GRIB problem must not cost the rest of the report
             warnings.append(f"GRIB forecasts skipped: {e}")

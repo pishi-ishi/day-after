@@ -22,3 +22,16 @@ def asset_path(*parts: str) -> str:
 def report_asset(name: str) -> str:
     """A file under `dayafter/report/assets/` (CSS and JavaScript inlined into reports)."""
     return os.path.join(PACKAGE_DIR, "report", "assets", name)
+
+
+def data_root() -> str:
+    """The private `data/` folder for `--selftest`: $DAYAFTER_DATA, else `data/` in the checkout, next to the
+    binary, or in the current folder (the first that exists)."""
+    env = os.environ.get("DAYAFTER_DATA")
+    if env:
+        return env
+    cands = [os.path.join(bundle_root(), "data")]
+    if getattr(sys, "frozen", False):
+        cands.append(os.path.join(os.path.dirname(sys.executable), "data"))
+    cands.append(os.path.join(os.getcwd(), "data"))
+    return next((c for c in cands if os.path.isdir(c)), cands[0])

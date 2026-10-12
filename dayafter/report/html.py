@@ -83,7 +83,7 @@ _THEME_BOOT = ("<script>try{var t=localStorage.getItem('da-theme');"
                "if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>")
 
 
-def page(title: str, body: str, data: dict, scripts: tuple[str, ...], description: str = "") -> str:
+def page(title: str, body: str, data: dict, scripts: tuple[str, ...], description: str = "", body_class: str = "") -> str:
     css = read_asset("report.css")
     js = "\n".join(read_asset(s) for s in scripts)
     return (
@@ -91,7 +91,7 @@ def page(title: str, body: str, data: dict, scripts: tuple[str, ...], descriptio
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         f"<meta name=\"generator\" content=\"Day After {esc(__version__)}\">\n"
         f"<meta name=\"description\" content=\"{esc(description)}\">\n"
-        f"<title>{esc(title)}</title>\n{_THEME_BOOT}\n<style>\n{css}\n</style>\n</head>\n<body>\n"
+        f"<title>{esc(title)}</title>\n{_THEME_BOOT}\n<style>\n{css}\n</style>\n</head>\n<body{f' class="{esc(body_class)}"' if body_class else ''}>\n"
         f"{body}\n{json_script(data)}\n<script>\n{js}\n</script>\n</body>\n</html>\n"
     )
 

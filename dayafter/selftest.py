@@ -18,12 +18,15 @@ class Skip(Exception):
 
 
 def _root(*parts: str) -> str:
+    if parts and parts[0] == "data":
+        return os.path.join(resources.data_root(), *parts[1:])
     return os.path.join(resources.bundle_root(), *parts)
 
 
 def _need(path: str) -> str:
     if not os.path.exists(path):
-        raise Skip(f"{os.path.relpath(path, resources.bundle_root())} not present")
+        hint = " (private race data; set DAYAFTER_DATA to its folder)" if path.startswith(resources.data_root()) else ""
+        raise Skip(f"{path} not present{hint}")
     return path
 
 
@@ -49,7 +52,7 @@ def check_time_zones() -> str:
 def check_yb_vector() -> str:
     from .ingest import yb
     hexfile = _need(_root("fixtures", "flinders_2026", "yb_allpositions3_head_team2.hex"))
-    tr = yb.decode_allpositions3(bytes.fromhex(open(hexfile).read().strip()))[2]
+    tr = yb.decode_allpositions3(bytes.fromhex(open(hexfile, encoding="ascii").read().strip()))[2]
     assert len(tr.t) == 121
     assert (int(tr.t[-1]), round(tr.lat[-1], 5), round(tr.lon[-1], 5)) == (1790460000, -33.87410, 151.23320)
     assert (int(tr.t[0]), round(tr.lat[0], 5), round(tr.lon[0], 5)) == (1790226684, -33.87438, 151.23318)
@@ -440,6 +443,39 @@ def check_season() -> str:
     return f"{rid}: stored once after two runs; {len(s['models'])} model verifications, {len(s['rivals'])} rivals"
 
 
+# --------------------------------------------------------------------------------------------- M5: editions, app
+
+def check_all_editions() -> str:
+    import re
+    from .report import editions
+    a = _analysis()
+    with tempfile.TemporaryDirectory() as d:
+        paths = editions.write_editions(a, editions.EDITIONS, d, season_path=os.path.join(d, "season.sqlite"))
+        sizes = {}
+        for ed, p in paths.items():
+            html = open(p, encoding="utf-8").read()
+            urls = set(re.findall(r"https?://[^\"'<>\s)]+", html))
+            allowed = {"http://www.w3.org/2000/svg", "https://github.com/pishi-ishi/day-after", "https://7seasmarine.me"}
+            assert urls <= allowed, (ed, urls - allowed)
+            assert "<script src" not in html and "<link " not in html, ed
+            sizes[ed] = len(html) // 1024
+            if ed == "7seas":
+                assert "Seven Seas Marine Electronics" in html and "info@7seasmarine.me" in html
+    assert set(paths) == set(editions.EDITIONS), paths
+    return ", ".join(f"{ed} {kb} KB" for ed, kb in sizes.items()) + "; all self-contained"
+
+
+def check_app_page() -> str:
+    from .app import server
+    html = server.app_page("selftest-token").decode("utf-8")
+    assert "selftest-token" in html and "const DA" in html and "/*CHARTS*/" not in html
+    with tempfile.TemporaryDirectory() as d:
+        s = server.scan(d)
+        assert s["checklist"]["after"][0]["level"] == "required" and s["checklist"]["after"][0]["n"] == 0
+        assert server._protected("/mnt/c/ProgramData/Expedition/log") and not server._protected(d)
+    return f"app page {len(html) // 1024} KB with the chart kit inlined; empty folder flags the log as required"
+
+
 CHECKS = [
     ("time zones and durations", check_time_zones),
     ("YB decoder test vector", check_yb_vector),
@@ -464,6 +500,8 @@ CHECKS = [
     ("M4 polar by phase", check_polar_by_phase),
     ("M4 manoeuvres", check_manoeuvres),
     ("M4 season database", check_season),
+    ("M5 every edition builds", check_all_editions),
+    ("M5 app page and folder scan", check_app_page),
 ]
 
 

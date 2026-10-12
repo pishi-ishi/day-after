@@ -19,3 +19,6 @@ tiles/
 *.log
 .DS_Store
 Thumbs.db
+# generated at build time
+packaging/icon.ico
+packaging/icon.png

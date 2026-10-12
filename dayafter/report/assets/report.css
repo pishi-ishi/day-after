@@ -68,7 +68,7 @@ a { color: inherit; }
 .cover .eyebrow { color: var(--ink-2); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
 .cover h1 { font-size: clamp(26px, 5vw, 38px); line-height: 1.15; margin: 4px 0 8px; font-weight: 650; }
 .cover .sub { color: var(--ink-2); margin: 0; }
-.cover .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.cover .topbar, .cover-7s .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .theme-btn {
   border: 1px solid var(--grid); background: var(--surface); color: var(--ink-2); border-radius: 999px;
   padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
@@ -174,7 +174,21 @@ footer p { margin: 4px 0; }
   @page { size: A4 portrait; margin: 14mm 12mm; }
   body { font-size: 11pt; }
   nav.toc, .theme-btn, .map-tools, .tooltip, details.table-view summary { display: none !important; }
-  figure.chart, .kpi, .howto, table, .model { break-inside: avoid; }
+  figure.chart, .kpi, .howto, table, .model, .finding, .recs li { break-inside: avoid; }
+  .kpis { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kpi { padding: 8px 10px; box-shadow: none; border: 1px solid var(--grid); }
+  .kpi .value { font-size: 18pt; }
+  .findings { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .finding { padding: 6px 8px; font-size: 9pt; }
+  table { font-size: 8pt; }
+  th, td { padding: 3px 5px !important; }
+  .table-wrap, .scroll { overflow: visible !important; }
+  figure.chart svg { max-height: 88mm; width: 100%; }
+  h2 { font-size: 15pt; margin: 8px 0 4px; }
+  .lede, .verdict { font-size: 9.5pt; }
+  .recs li { margin: 4px 0; font-size: 9.5pt; }
+  .finding { box-shadow: none; border: 1px solid var(--grid); }
+  figure.chart { box-shadow: none; border: 1px solid var(--grid); }
   section { break-inside: auto; padding-top: 12px; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: var(--ink-2); }
 }
@@ -200,3 +214,30 @@ footer p { margin: 4px 0; }
 .check-fix { color: var(--ink-2); }
 p.small { font-size: 13px; color: var(--ink-2); }
 tr.hole td { color: var(--ink-2); font-style: italic; }
+
+/* Skipper edition: decisions list */
+.recs { padding-left: 22px; margin: 6px 0 14px; max-width: 90ch; }
+.recs li { margin: 8px 0; }
+
+/* 7 Seas client edition (docs/BRAND.md §3): brand colours frame the page and never encode data */
+body.brand-7s { --7s-ink: #000; --7s-navy: #2e3a51; --7s-sky: #e6f8ff; --7s-aqua: #bef7f6; --7s-sand: #d0c7ba;
+  font-family: "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body.brand-7s h1, body.brand-7s h2, body.brand-7s h3 { font-family: Montserrat, "Segoe UI", system-ui, sans-serif; }
+.cover-7s { background: var(--7s-sky); color: #000; padding: 20px 0 22px; border-bottom: 6px solid var(--7s-navy); }
+.cover-7s h1 { color: #000; margin: 4px 0 2px; }
+.cover-7s .eyebrow { color: var(--7s-navy); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: 13px; margin-top: 10px; }
+.cover-7s .sub, .cover-7s .prepared { color: #2e3a51; }
+.cover-7s .prepared { font-size: 13px; margin-top: 10px; }
+.cover-7s a { color: #2e3a51; }
+.cover-7s .theme-btn { color: #2e3a51; border-color: #2e3a51; background: transparent; }
+.logo-7s { width: 120px; color: #000; }
+.logo-7s svg { width: 100%; height: auto; display: block; }
+body.brand-7s section > h2 { border-bottom: 2px solid var(--7s-navy); padding-bottom: 4px; }
+body.brand-7s .kpi { border-top: 3px solid var(--7s-aqua); }
+body.brand-7s footer { border-top: 4px solid var(--7s-navy); }
+.appendix-head { border-top: 1px dashed var(--grid); margin-top: 24px; }
+@media print {
+  body.brand-7s .cover-7s { break-after: page; min-height: 92vh; display: flex; align-items: center; }
+  .appendix-head { break-before: page; }
+  @page { @bottom-right { content: counter(page); font-size: 9pt; color: #52514e; } }
+}

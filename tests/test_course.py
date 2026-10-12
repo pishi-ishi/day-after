@@ -40,7 +40,7 @@ def test_course_csv_turning_mark_group():
 
 def test_gpx_numbered_points(tmp_path):
     p = tmp_path / "t.gpx"
-    p.write_text(GPX)
+    p.write_text(GPX, encoding="utf-8")
     c = C.assign_roles(C.read_gpx(str(p)))
     assert [m.name for m in c.marks] == ["1", "2", "3", "4", "5"]
     assert c.turning_mark.name == "3"
@@ -50,7 +50,7 @@ def test_gpx_numbered_points(tmp_path):
 
 def test_marks_xml_active_route_and_validation(tmp_path):
     p = tmp_path / "marks.xml"
-    p.write_text(MARKS_XML)
+    p.write_text(MARKS_XML, encoding="utf-8")
     names, active = C.marks_xml_routes(str(p))
     assert active == "Tollgate_Islands_Windy" and "Wrong finish" in names
     c = C.assign_roles(C.read_marks_xml(str(p)))
@@ -62,6 +62,6 @@ def test_marks_xml_active_route_and_validation(tmp_path):
 
 def test_unknown_turning_mark_warns(tmp_path):
     p = tmp_path / "t.gpx"
-    p.write_text(GPX)
+    p.write_text(GPX, encoding="utf-8")
     c = C.assign_roles(C.read_gpx(str(p)), turning_mark="Lord Howe")
     assert c.turning_mark.name == "3" and c.warnings

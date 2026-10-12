@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day After</title>
+<style>/*REPORT_CSS*/</style>
+<style>
+/* App UI tokens (docs/BRAND.md §1, from 7seas-telemetrics). Charts in the preview use the report tokens below. */
+:root {
+  color-scheme: dark;
+  --bg: #000000; --panel: #121212; --panel-2: #1c1c1c; --panel-3: #242424;
+  --text: #fafafa; --muted: #a7a7a7; --dim: #6f6f6f;
+  --accent: #dc143c; --accent-hover: #f04060; --ok: #22c55e; --warn: #f5b544; --err: #ef4444;
+  /* report tokens used by charts.js (dark steps) */
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --grid: #2c2c2a; --land: #2a2a28;
+  --coast: #5a5955; --boat: #3987e5; --m-gfs: #d95926; --m-ecmwf: #199e70; --m-access: #9085e9; --m-other: #9a9890;
+  --band: rgba(240, 239, 236, 0.08);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--font); }
+header.app { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--panel-3); }
+header.app h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .01em; }
+header.app h1 span { color: var(--accent); }
+header.app .ver { color: var(--dim); font-size: 12px; }
+header.app .folder { margin-left: auto; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55vw; }
+main.cols { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.5fr) minmax(280px, 1fr); gap: 14px; padding: 14px 18px; }
+@media (max-width: 1000px) { main.cols { grid-template-columns: 1fr; padding: 12px 16px; } header.app .folder { display: none; } }
+.panel { background: var(--panel); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+button, .btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--panel-3); border-radius: 8px;
+  padding: 7px 12px; font: inherit; cursor: pointer; }
+button:hover { background: var(--panel-3); }
+button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-hover); }
+button:disabled { opacity: .5; cursor: default; }
+input[type=text], select { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--panel-3);
+  border-radius: 8px; padding: 7px 9px; font: inherit; }
+label.f { display: block; color: var(--muted); font-size: 13px; margin: 10px 0 4px; }
+.crumbs { color: var(--muted); font-size: 13px; word-break: break-all; margin-bottom: 8px; }
+.dirs { max-height: 260px; overflow: auto; border: 1px solid var(--panel-3); border-radius: 8px; }
+.dirs div { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--panel-2); }
+.dirs div:hover { background: var(--panel-2); }
+.roots { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.roots button { font-size: 12px; padding: 4px 8px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.check { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start; padding: 6px 0; border-bottom: 1px solid var(--panel-2); }
+.check .ico { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #000; margin-top: 2px; }
+.ico.ok { background: var(--ok); } .ico.warn { background: var(--warn); } .ico.err { background: var(--err); } .ico.opt { background: var(--panel-3); color: var(--muted); }
+.check .lvl { color: var(--dim); font-size: 12px; }
+.check .files { color: var(--dim); font-size: 12px; word-break: break-all; }
+.drop { border: 2px dashed var(--panel-3); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); margin-top: 10px; }
+.drop.over { border-color: var(--accent); color: var(--text); }
+.seg { display: inline-flex; background: var(--panel-2); border-radius: 9px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; }
+.seg button.on { background: var(--accent); }
+.eds label { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.log { background: #050505; border: 1px solid var(--panel-3); border-radius: 8px; padding: 8px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  height: 180px; overflow: auto; white-space: pre-wrap; color: var(--muted); }
+.outs a { display: block; overflow-wrap: anywhere; color: var(--text); padding: 6px 0; border-bottom: 1px solid var(--panel-2); text-decoration: none; }
+.outs a:hover { color: var(--accent-hover); }
+.outs small { color: var(--dim); }
+.msg { color: var(--muted); font-size: 13px; }
+.msg.err { color: var(--err); }
+.figure { background: var(--surface); border-radius: 10px; overflow: hidden; }
+.figure .chart-body { min-height: 300px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); padding: 8px 10px 0; }
+/* chart kit text classes */
+svg text { fill: var(--ink-2); font: 11px var(--font); }
+svg .t-ink, svg .t-strong { fill: var(--ink); } svg .t-strong { font-weight: 600; }
+.tooltip { position: fixed; z-index: 10; background: var(--panel-2); color: var(--text); border: 1px solid var(--panel-3);
+  border-radius: 8px; padding: 6px 9px; font-size: 12px; pointer-events: none; display: none; min-width: 140px; }
+.map-tools { display: flex; gap: 6px; padding: 6px 10px; }
+.map-tools button { font-size: 12px; padding: 3px 8px; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--panel-3); color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="app">
+  <h1>day <span>after</span></h1><span class="ver">__VERSION__</span>
+  <div class="folder" id="cur-folder">No race folder chosen</div>
+</header>
+<main class="cols">
+  <div>
+    <section class="panel">
+      <h2>Race folder</h2>
+      <div class="roots" id="roots"></div>
+      <div class="crumbs" id="crumbs"></div>
+      <div class="dirs" id="dirs"></div>
+      <div class="row" style="margin-top:10px"><button id="up">Up</button><button class="primary" id="choose">Use this folder</button></div>
+      <p class="msg">Any layout works: Day After finds the log, routings, GRIBs, results and tracks by their content.</p>
+    </section>
+    <section class="panel">
+      <h2>Inputs</h2>
+      <div id="checklist" class="msg">Choose a race folder.</div>
+      <div class="drop" id="drop">Drop files here to add them to the race folder (they go into <code>added/</code>).</div>
+    </section>
+  </div>
+  <div>
+    <section class="panel">
+      <h2>Preview</h2>
+      <div class="figure" id="preview"><div class="legend"></div><div class="chart-body"><p class="msg" style="padding:12px">The track and routes appear here.</p></div></div>
+      <div class="row" style="margin-top:8px"><button id="load-preview" disabled>Show track and routes</button><span class="msg" id="preview-msg"></span></div>
+    </section>
+    <section class="panel">
+      <h2>Race settings</h2>
+      <label class="f" for="race-name">Race name</label><input type="text" id="race-name">
+      <label class="f" for="gun">Gun (local time, e.g. 2026-10-16T17:00:00)</label><input type="text" id="gun">
+      <label class="f" for="turning">Turning mark (name as in the course)</label><input type="text" id="turning">
+      <label class="f" for="rivals">Rivals (default: same division, nearest TCC)</label>
+      <select id="rivals" multiple size="5"></select>
+      <div class="row" style="margin-top:10px"><button id="save-project" disabled>Save race file</button><span class="msg" id="save-msg"></span></div>
+    </section>
+  </div>
+  <div>
+    <section class="panel">
+      <h2>Build</h2>
+      <div class="seg" role="tablist"><button id="mode-before" type="button">Day Before</button><button id="mode-after" class="on" type="button">Day After</button></div>
+      <div class="eds" id="eds" style="margin-top:10px">
+        <label><input type="checkbox" value="navigator" checked> Navigator <span class="tag">full</span></label>
+        <label><input type="checkbox" value="skipper" checked> Skipper / owner <span class="tag">4 pages</span></label>
+        <label><input type="checkbox" value="crew" checked> Crew <span class="tag">meteograms</span></label>
+        <label><input type="checkbox" value="7seas"> 7 Seas client <span class="tag">branded</span></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="primary" id="build" disabled>Build</button><span class="msg" id="build-msg"></span></div>
+      <div class="log" id="log" style="margin-top:10px"></div>
+    </section>
+    <section class="panel">
+      <h2>YB fleet tracks</h2>
+      <label class="f" for="ybkey">Race key (the last part of the tracker link, e.g. bwps2026_2)</label>
+      <div class="row"><input type="text" id="ybkey" style="flex:1"><button id="fetch-yb" disabled>Fetch</button></div>
+      <p class="msg">Fetch on race day or soon after: YB takes races offline later.</p>
+    </section>
+    <section class="panel">
+      <h2>Reports</h2>
+      <div class="outs" id="outs"><span class="msg">Reports appear here after a build.</span></div>
+    </section>
+  </div>
+</main>
+<script>
+/*CHARTS*/
+</script>
+<script>
+"use strict";
+(function () {
+  const TOKEN = "__TOKEN__";
+  const $ = (id) => document.getElementById(id);
+  const api = async (path, opts = {}) => {
+    const r = await fetch(path, { ...opts, headers: { "X-DA-Token": TOKEN, ...(opts.headers || {}) } });
+    const j = await r.json().catch(() => ({ error: r.statusText }));
+    if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+    return j;
+  };
+  const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data), headers: { "Content-Type": "application/json" } });
+  let here = null, folder = null, mode = "after", state = null;
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+
+  function text(el, s) { el.textContent = s; return el; }
+  function node(tag, cls, s) { const e = document.createElement(tag); if (cls) e.className = cls; if (s !== undefined) e.textContent = s; return e; }
+
+  async function browse(path) {
+    try {
+      const b = await api("/api/browse?path=" + encodeURIComponent(path || ""));
+      here = b.path;
+      text($("crumbs"), b.path + (b.files ? `  ·  ${b.files} files` : ""));
+      const d = $("dirs"); d.textContent = "";
+      for (const name of b.dirs) {
+        const e = node("div", "", "▸ " + name);
+        e.onclick = () => browse(b.path.replace(/[\\/]$/, "") + (b.path.includes("\\") ? "\\" : "/") + name);
+        d.appendChild(e);
+      }
+      if (!b.dirs.length) d.appendChild(node("div", "msg", "no sub-folders"));
+      $("up").disabled = !b.parent; $("up").onclick = () => browse(b.parent);
+      const r = $("roots"); r.textContent = "";
+      for (const x of b.roots) { const btn = node("button", "", x.name); btn.onclick = () => browse(x.path); r.appendChild(btn); }
+    } catch (e) { text($("crumbs"), "Cannot open: " + e.message); }
+  }
+
+  const ICON = { ok: "✓", warn: "!", err: "✕", opt: "–" };
+  async function choose(path) {
+    folder = path; store.set("da-folder", path);
+    text($("cur-folder"), path);
+    try { state = await api("/api/scan?folder=" + encodeURIComponent(path)); } catch (e) { text($("checklist"), e.message); return; }
+    for (const id of ["load-preview", "save-project", "build", "fetch-yb"]) $(id).disabled = state.protected;
+    if (state.protected) text($("build-msg"), "This is Expedition's own folder: copy the files into a race folder first.");
+    renderChecklist(); renderProject(); renderOutputs(state.outputs);
+  }
+
+  function renderChecklist() {
+    const c = $("checklist"); c.textContent = "";
+    for (const row of state.checklist[mode === "before" ? "before" : "after"]) {
+      const lvl = row.n ? "ok" : row.level === "required" ? "err" : row.level === "recommended" ? "warn" : "opt";
+      const e = node("div", "check");
+      const ico = node("span", "ico " + lvl, ICON[lvl]); ico.setAttribute("aria-label", lvl === "ok" ? "found" : "missing");
+      const mid = node("div"); mid.appendChild(node("div", "", row.label));
+      if (row.files.length) mid.appendChild(node("div", "files", row.files.slice(0, 3).join(", ") + (row.n > 3 ? ` … (${row.n})` : "")));
+      e.append(ico, mid, node("span", "lvl", row.n ? `${row.n} found` : row.level));
+      c.appendChild(e);
+    }
+    if (state.encrypted_gribs) c.appendChild(node("p", "msg", `${state.encrypted_gribs} encrypted GRIB file(s) (ACCESS, UM) will be skipped.`));
+  }
+
+  function renderProject() {
+    const p = state.project;
+    $("race-name").value = p.race.name || "";
+    $("gun").value = p.race.gun_local || "";
+    $("turning").value = (p.course && p.course.turning_mark) || "";
+    $("ybkey").value = (p.fleet && p.fleet.yb_key) || "";
+    const sel = $("rivals"); sel.textContent = "";
+    const chosen = new Set((p.fleet && p.fleet.rivals) || []);
+    for (const r of state.results) {
+      const o = node("option", "", `${r.yacht} (div ${r.division}, TCC ${r.tcc})`); o.value = r.yacht; o.selected = chosen.has(r.yacht);
+      sel.appendChild(o);
+    }
+    if (!state.results.length) sel.appendChild(node("option", "", "Add results.csv to pick rivals"));
+  }
+
+  function renderOutputs(outs) {
+    const o = $("outs"); o.textContent = "";
+    if (!outs || !outs.length) { o.appendChild(node("span", "msg", "Reports appear here after a build.")); return; }
+    for (const x of outs) {
+      const a = node("a", "", x.name);
+      a.href = "/file?path=" + encodeURIComponent(x.path) + "&t=" + TOKEN; a.target = "_blank"; a.rel = "noopener";
+      if (x.mtime) a.appendChild(node("small", "", "  " + new Date(x.mtime * 1000).toLocaleString()));
+      o.appendChild(a);
+    }
+  }
+
+  async function watch(job, onDone) {
+    const log = $("log");
+    for (;;) {
+      const j = await api("/api/job/" + job.id);
+      log.textContent = j.lines.join("\n"); log.scrollTop = log.scrollHeight;
+      if (j.state !== "running") {
+        text($("build-msg"), j.state === "done" ? `done in ${j.seconds} s` : j.error);
+        $("build-msg").className = "msg" + (j.state === "done" ? "" : " err");
+        if (onDone) onDone(j);
+        return;
+      }
+      text($("build-msg"), `working… ${Math.round(j.seconds)} s`);
+      await new Promise((r) => setTimeout(r, 700));
+    }
+  }
+
+  $("choose").onclick = () => here && choose(here);
+  $("mode-before").onclick = () => { mode = "before"; $("mode-before").classList.add("on"); $("mode-after").classList.remove("on"); $("eds").style.display = "none"; if (state) renderChecklist(); };
+  $("mode-after").onclick = () => { mode = "after"; $("mode-after").classList.add("on"); $("mode-before").classList.remove("on"); $("eds").style.display = ""; if (state) renderChecklist(); };
+  $("build").onclick = async () => {
+    const eds = [...document.querySelectorAll("#eds input:checked")].map((x) => x.value);
+    $("build").disabled = true;
+    try {
+      const job = await post("/api/build", { folder, mode, editions: eds });
+      await watch(job, async () => { $("build").disabled = false; state = await api("/api/scan?folder=" + encodeURIComponent(folder)); renderOutputs(state.outputs); renderChecklist(); });
+    } catch (e) { text($("build-msg"), e.message); $("build").disabled = false; }
+  };
+  $("fetch-yb").onclick = async () => {
+    try {
+      const job = await post("/api/fetch-yb", { folder, key: $("ybkey").value });
+      await watch(job, async () => { state = await api("/api/scan?folder=" + encodeURIComponent(folder)); renderChecklist(); });
+    } catch (e) { text($("build-msg"), e.message); }
+  };
+  $("save-project").onclick = async () => {
+    const rivals = [...$("rivals").selectedOptions].map((o) => o.value).filter((v) => state.results.some((r) => r.yacht === v));
+    try {
+      const r = await post("/api/project", { folder, project: {
+        race: { name: $("race-name").value.trim(), gun_local: $("gun").value.trim() },
+        course: { turning_mark: $("turning").value.trim() }, fleet: { yb_key: $("ybkey").value.trim(), rivals } } });
+      text($("save-msg"), "saved " + r.saved.split(/[\\/]/).pop());
+    } catch (e) { text($("save-msg"), e.message); }
+  };
+  $("load-preview").onclick = async () => {
+    text($("preview-msg"), "reading the log…");
+    try {
+      const P = await api("/api/preview?folder=" + encodeURIComponent(folder));
+      const host = document.querySelector("#preview .chart-body");
+      const routes = (P.routes || []).map((r) => Object.assign({ name: `${r.model} route`, t: r.t, lat: r.lat, lon: r.lon, width: 1.5, hourly: false, info: () => [] }, DA.modelStyle(r.model)));
+      if (P.track) routes.push({ name: "our track", t: P.track.t, lat: P.track.lat, lon: P.track.lon, color: "var(--boat)", width: 2.5, marker: "circle", info: () => [] });
+      if (!routes.length) { text($("preview-msg"), "no log or route tables yet"); return; }
+      DA.setZone("Australia/Sydney");
+      DA.legend(document.querySelector("#preview .legend"), routes.map((r) => ({ label: r.name, color: r.color, dash: r.dash })));
+      DA.mount(host, () => DA.map(host, { land: P.land, coast: P.coast, islands: [], marks: [], routes, aria: "Track and routes" }));
+      text($("preview-msg"), "");
+    } catch (e) { text($("preview-msg"), e.message); }
+  };
+
+  const drop = $("drop");
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", async (e) => {
+    e.preventDefault(); drop.classList.remove("over");
+    if (!folder) { text(drop, "Choose a race folder first."); return; }
+    const done = [];
+    for (const f of e.dataTransfer.files) {
+      try {
+        const r = await api(`/api/upload?folder=${encodeURIComponent(folder)}&name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+        done.push(`${f.name}${r.kind ? " (" + r.kind.replace(/_/g, " ") + ")" : " (not recognised)"}`);
+      } catch (err) { done.push(`${f.name}: ${err.message}`); }
+    }
+    text(drop, "Added: " + done.join(", "));
+    state = await api("/api/scan?folder=" + encodeURIComponent(folder)); renderChecklist();
+  });
+
+  const qs = new URLSearchParams(location.search);
+  const start = qs.get("folder") || store.get("da-folder");
+  browse(start || "");
+  if (start) choose(start);
+})();
+</script>
+</body>
+</html>
